@@ -8,6 +8,8 @@
 //  2. Cuando se tilda "confirmado" en un pedido, descuenta el stock.
 //     Si no alcanza el stock, no lo confirma y avisa qué falta (nunca queda en negativo).
 //     Si se destilda, lo devuelve.
+//     Cada vez revisa TODOS los pedidos, así un clic que Google se saltee se acomoda solo.
+//     Menú "Cremita → Revisar pedidos y stock" para forzar la revisión.
 //  3. Si se agrega un producto nuevo sin "id", le pone uno solo.
 //
 // Hojas y columnas que espera (la fila 1 son los títulos):
@@ -72,6 +74,26 @@ function doGet(e) {
 
 // ---------- 2 y 3. Reaccionar cuando la dueña edita la planilla ----------
 
+// Menú "Cremita" arriba en la planilla, por si algún pedido quedó desparejo
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('Cremita')
+    .addItem('Revisar pedidos y stock', 'revisarAhora')
+    .addToUi();
+}
+
+function revisarAhora() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(25000)) { libro.toast('Esperá un segundo y volvé a intentar.', 'Planilla ocupada', 5); return; }
+  try {
+    const cambios = revisarPedidos_();
+    SpreadsheetApp.flush();
+    libro.toast(cambios ? 'Se acomodaron ' + cambios + ' pedido(s).' : 'Todo en orden.', 'Pedidos revisados', 5);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function onEdit(e) {
   const hoja = e.range.getSheet();
   const nombre = hoja.getName();
@@ -91,48 +113,81 @@ function onEdit(e) {
   const primera = e.range.getColumn(), ultima = primera + e.range.getNumColumns() - 1;
   if (P_CONFIRMADO < primera || P_CONFIRMADO > ultima) return;
 
-  // Un clic por vez: si se tilda y destilda rápido, Google corre el script varias veces
-  // en paralelo y podría descontar o devolver dos veces. Con el candado esperan su turno.
+  // Un clic por vez: si se tilda rápido, Google corre el script varias veces a la vez.
+  // Con el candado esperan su turno. Y como cada vuelta revisa TODOS los pedidos,
+  // si Google se saltea algún clic, la vuelta siguiente lo acomoda.
   const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(20000)) {
-    SpreadsheetApp.getActiveSpreadsheet().toast('Esperá un segundo y volvé a intentar.', 'Planilla ocupada', 5);
-    return;
-  }
+  if (!lock.tryLock(25000)) return; // otra vuelta ya está revisando todo
   try {
-    revisarPedidos_(hoja, e.range.getRow(), e.range.getNumRows());
+    revisarPedidos_();
     SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
   }
 }
 
-// Revisa cada fila tocada y descuenta o devuelve stock según el tilde ACTUAL de "confirmado"
-function revisarPedidos_(hoja, desde, cuantas) {
-  for (let fila = desde; fila < desde + cuantas; fila++) {
-    if (fila < 2) continue;
-    const confirmado = hoja.getRange(fila, P_CONFIRMADO).getValue() === true;
-    const descontado = hoja.getRange(fila, P_DESCONTADO).getValue() === true;
-    const items = JSON.parse(hoja.getRange(fila, P_ITEMS).getValue() || '[]');
+// Recorre todos los pedidos y deja el stock de acuerdo al tilde ACTUAL de "confirmado":
+//   confirmado y no descontado → descuenta (si alcanza; si no, lo destilda y avisa)
+//   no confirmado y descontado → devuelve
+// Lee todo de una vez y solo escribe las celdas que cambian. Devuelve cuántos pedidos tocó.
+function revisarPedidos_() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = libro.getSheetByName(HOJA_PEDIDOS);
+  const filas = hoja.getLastRow() - 1;
+  if (filas < 1) return 0;
 
-    const celda = hoja.getRange(fila, P_CONFIRMADO);
-    if (confirmado && !descontado) {
+  const datos = hoja.getRange(2, 1, filas, P_ITEMS).getValues();
+  const notas = hoja.getRange(2, P_CONFIRMADO, filas, 1).getNotes();
+  const hojaProd = libro.getSheetByName(HOJA_PRODUCTOS);
+  const colStock = hojaProd.getRange(1, 1, 1, hojaProd.getLastColumn()).getValues()[0]
+    .map(t => String(t).trim().toLowerCase()).indexOf('stock') + 1;
+  const productos = leerProductos_(libro);   // el stock se va actualizando acá, en memoria
+  const stockCambiado = {};
+  const conStock = p => p && p.stock !== null && !isNaN(p.stock);
+  let cambios = 0;
+
+  for (let i = 0; i < filas; i++) {
+    const fila = i + 2, d = datos[i];
+    const confirmado = d[P_CONFIRMADO - 1] === true;
+    const descontado = d[P_DESCONTADO - 1] === true;
+    if (confirmado === descontado) {                            // ya está bien
+      if (confirmado && notas[i][0]) hoja.getRange(fila, P_CONFIRMADO).setNote('');
+      continue;
+    }
+    let items;
+    try { items = JSON.parse(d[P_ITEMS - 1] || '[]'); } catch (err) { items = []; }
+
+    if (confirmado) {
       // Antes de descontar, revisa que alcance el stock de TODOS los productos del pedido
-      const faltan = faltantes_(items);
+      const faltan = [];
+      items.forEach(it => {
+        const p = productos[String(it.id)];
+        if (!p) faltan.push('producto ' + it.id + ' (ya no existe)');
+        else if (conStock(p) && p.stock < it.cant) faltan.push(p.nombre + ' (pide ' + it.cant + ', hay ' + Math.max(0, p.stock) + ')');
+      });
+      const celda = hoja.getRange(fila, P_CONFIRMADO);
       if (faltan.length) {
         celda.setValue(false);                                  // no se confirma
         const aviso = 'No alcanza el stock: ' + faltan.join(', ');
         celda.setNote(aviso);
-        SpreadsheetApp.getActiveSpreadsheet().toast(aviso, 'Pedido ' + hoja.getRange(fila, P_PEDIDO).getValue() + ' sin confirmar', 10);
+        libro.toast(aviso, 'Pedido ' + d[P_PEDIDO - 1] + ' sin confirmar', 10);
         continue;
       }
-      moverStock_(items, -1);                                   // se vendió: baja el stock
-      hoja.getRange(fila, P_DESCONTADO).setValue(true);
-      celda.setNote('');
-    } else if (!confirmado && descontado) {
-      moverStock_(items, +1);                                   // se canceló: vuelve el stock
-      hoja.getRange(fila, P_DESCONTADO).setValue(false);
+      items.forEach(it => { const p = productos[String(it.id)]; if (conStock(p)) { p.stock -= it.cant; stockCambiado[it.id] = p; } });
+      hoja.getRange(fila, P_DESCONTADO).setValue(true);        // se vendió: bajó el stock
+      if (notas[i][0]) celda.setNote('');
+    } else {
+      items.forEach(it => { const p = productos[String(it.id)]; if (conStock(p)) { p.stock += it.cant; stockCambiado[it.id] = p; } });
+      hoja.getRange(fila, P_DESCONTADO).setValue(false);       // se canceló: volvió el stock
     }
+    cambios++;
   }
+
+  Object.keys(stockCambiado).forEach(id => {
+    const p = stockCambiado[id];
+    hojaProd.getRange(p.fila, colStock).setValue(p.stock);
+  });
+  return cambios;
 }
 
 // ---------- Ayudantes ----------
@@ -156,33 +211,6 @@ function leerProductos_(libro) {
     };
   }
   return productos;
-}
-
-// Lista lo que no alcanza: ["Pelota mordedora (pide 3, hay 1)", …]. Vacía = alcanza todo.
-function faltantes_(items) {
-  const productos = leerProductos_(SpreadsheetApp.getActiveSpreadsheet());
-  const faltan = [];
-  items.forEach(it => {
-    const p = productos[String(it.id)];
-    if (!p) { faltan.push('producto ' + it.id + ' (ya no existe)'); return; }
-    if (p.stock === null || isNaN(p.stock)) return;            // sin control de stock
-    if (p.stock < it.cant) faltan.push(p.nombre + ' (pide ' + it.cant + ', hay ' + Math.max(0, p.stock) + ')');
-  });
-  return faltan;
-}
-
-// Suma o resta del stock las cantidades de un pedido (signo = -1 vende, +1 devuelve)
-function moverStock_(items, signo) {
-  const libro = SpreadsheetApp.getActiveSpreadsheet();
-  const hoja = libro.getSheetByName(HOJA_PRODUCTOS);
-  const columnaStock = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0]
-    .map(t => String(t).trim().toLowerCase()).indexOf('stock') + 1;
-  const productos = leerProductos_(libro);
-  items.forEach(it => {
-    const p = productos[String(it.id)];
-    if (!p || p.stock === null || isNaN(p.stock)) return; // sin control de stock
-    hoja.getRange(p.fila, columnaStock).setValue(p.stock + signo * it.cant);
-  });
 }
 
 // Si una fila tiene nombre pero no id, le pone el siguiente número libre
