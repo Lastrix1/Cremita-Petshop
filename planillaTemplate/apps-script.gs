@@ -125,6 +125,15 @@ function prepararPlanilla() {
   const agregadas = conCandado_(() => {
     sacarColumnas_(libro.getSheetByName(HOJA_PRODUCTOS), COLUMNAS_A_SACAR);
     const prod = libro.getSheetByName(HOJA_PRODUCTOS), cp = columnas_(prod);
+    if (cp.stock && prod.getLastRow() > 1) {
+      // Arregla los stocks que Google convirtió en fecha (ej: "13-5") y deja la columna como número
+      const rango = prod.getRange(2, cp.stock, prod.getLastRow() - 1, 1);
+      const valores = rango.getValues();
+      let arreglados = 0;
+      valores.forEach((fila, i) => { if (fila[0] instanceof Date) { fila[0] = Math.max(0, restaDesdeFecha_(fila[0])); arreglados++; } });
+      rango.setNumberFormat('0');
+      if (arreglados) { rango.setValues(valores); libro.toast(arreglados + ' stock(s) que habían quedado como fecha se pasaron a número.', 'Stock', 8); }
+    }
     if (cp.stock) prod.getRange(1, cp.stock).setNote('Para restar escribí -3 y Enter. Para sumar escribí la cuenta, ej: 9+5. Un número solo (ej: 8) deja el stock en ese número.');
     const a = prepararHoja_(libro.getSheetByName(HOJA_PEDIDOS), COLUMNAS_PEDIDOS);
     // Rehace los links de WhatsApp de todos los pedidos (arregla los que hayan quedado con error)
@@ -205,6 +214,9 @@ function editarDetalle_(e, hoja, c) {
   const volver = (titulo, msg) => { celda.setValue(anterior); libro.toast(msg, titulo, 10); };
   const v = t => (c[t] ? hoja.getRange(fila, c[t]).getValue() : '');
 
+  // Primero se acomodan los clics que estén pendientes (por ejemplo, si recién destildaste "confirmado")
+  revisarPedidos_();
+
   if (v('descontado') === true || v('confirmado') === true)
     return volver('No se cambió', 'El pedido está confirmado: destildá "confirmado" (vuelve el stock), editalo y confirmalo de nuevo.');
   if (v('cancelado') === true)
@@ -247,6 +259,15 @@ function editarDetalle_(e, hoja, c) {
   libro.toast('Nuevo total: ' + pesos_(total) + '. Ya lo podés confirmar.', 'Pedido editado', 6);
 }
 
+// Google toma "13-5" como la fecha 13 de mayo. Se recupera la cuenta: 13 − 5 = 8.
+// (En planillas en inglés el orden es mes-día; se usa el idioma de la planilla.)
+function restaDesdeFecha_(fecha) {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const [dia, mes] = Utilities.formatDate(fecha, libro.getSpreadsheetTimeZone(), 'd-M').split('-').map(Number);
+  const mesPrimero = /^en_US/.test(String(libro.getSpreadsheetLocale ? libro.getSpreadsheetLocale() : ''));
+  return mesPrimero ? mes - dia : dia - mes;
+}
+
 // Celda de stock:
 //   "-3"   → resta 3 a lo que había
 //   "9+5"  → hace la cuenta y deja 14 (sirve para sumar: lo que hay + lo que entró)
@@ -262,6 +283,7 @@ function sumarEnCelda_(e) {
 
   const sumaFormula = formula.match(/^=\s*\+\s*(\d+)\s*$/);       // por si Google lo guardó como =+5
   if (sumaFormula) nuevo = antes + Number(sumaFormula[1]);
+  else if (valor instanceof Date) nuevo = restaDesdeFecha_(valor);  // "13-5" → Google lo tomó como fecha
   else if (!formula && typeof valor === 'number' && valor < 0) nuevo = antes + valor;
   else if (!formula && typeof valor === 'string') {
     const t = valor.replace(/\s/g, '');
@@ -276,7 +298,7 @@ function sumarEnCelda_(e) {
     }
   }
   if (nuevo === null || isNaN(nuevo)) return;                   // número común: queda lo que escribió
-  celda.setValue(Math.max(0, nuevo));                           // nunca menos de 0
+  celda.setNumberFormat('0').setValue(Math.max(0, nuevo));      // nunca menos de 0 (y que no quede como fecha)
   SpreadsheetApp.getActiveSpreadsheet().toast(
     'Stock: ' + antes + ' → ' + Math.max(0, nuevo) + (nuevo < 0 ? ' (no alcanzaba, quedó en 0)' : ''), 'Stock actualizado', 4);
 }
@@ -297,7 +319,10 @@ function revisarPedidos_() {
   const datos = hoja.getRange(2, 1, filas, ancho).getValues();
   const notas = hoja.getRange(2, c.confirmado, filas, 1).getNotes();
   const tachados = hoja.getRange(2, 1, filas, 1).getFontLines();
-  const links = c.whatsapp ? hoja.getRange(2, c.whatsapp, filas, 1).getDisplayValues() : datos.map(() => ['']);
+  // Lo que hay ahora en "whatsapp" (texto y link), para reescribirlo solo si cambió algo
+  const links = c.whatsapp
+    ? hoja.getRange(2, c.whatsapp, filas, 1).getRichTextValues().map(f => [{ texto: f[0] ? f[0].getText() : '', url: f[0] ? f[0].getLinkUrl() || '' : '' }])
+    : datos.map(() => [{ texto: '', url: '' }]);
   const hojaProd = libro.getSheetByName(HOJA_PRODUCTOS);
   const colStock = columnas_(hojaProd).stock;
   const productos = leerProductos_(libro);   // el stock se va actualizando acá, en memoria
@@ -372,7 +397,9 @@ function revisarPedidos_() {
 function conCandado_(tarea, silencioso) {
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(25000)) {
-    if (!silencioso) SpreadsheetApp.getActiveSpreadsheet().toast('Esperá un segundo y volvé a intentar.', 'Planilla ocupada', 5);
+    SpreadsheetApp.getActiveSpreadsheet().toast(silencioso
+      ? 'Hubo muchos cambios juntos. Si algo no se actualizó, usá Cremita → Revisar pedidos y stock.'
+      : 'Esperá un segundo y volvé a intentar.', 'Planilla ocupada', 8);
     return null;
   }
   try {
@@ -417,21 +444,23 @@ function prepararHoja_(hoja, nuevas) {
 // Columna "whatsapp" según el estado del pedido (solo la reescribe si cambió):
 //   pendiente → "Escribirle" · confirmado → "Avisar confirmación" · cancelado → "Avisar cancelación"
 //   no alcanzó el stock al confirmar → "Avisar falta de stock"
-function linkSegunEstado_(hoja, c, fila, d, textoActual, estado, nota) {
+function linkSegunEstado_(hoja, c, fila, d, actual, estado, nota) {
   if (!c.whatsapp) return;
   const v = t => (c[t] ? d[c[t] - 1] : '');
   const tel = numeroWhatsApp_(v('telefono'));
   const celda = hoja.getRange(fila, c.whatsapp);
   const textos = { '': 'Escribirle', confirmado: 'Avisar confirmación', cancelado: 'Avisar cancelación', sinstock: 'Avisar falta de stock' };
   const texto = tel ? textos[estado] : '';
-  if (texto === String(textoActual)) return;                   // ya está bien
-  if (!texto) { celda.clearContent(); return; }
+  actual = actual || { texto: '', url: '' };
+  if (!texto) { if (actual.texto) celda.clearContent(); return; }
 
   const nombre = String(v('nombre')).trim(), codigo = String(v('pedido')).trim();
   const hola = '¡Hola' + (nombre ? ' ' + nombre : '') + '! Te escribimos de ' + NOMBRE_TIENDA + '. ';
   const pedido = 'Tu pedido' + (codigo ? ' #' + codigo : '');
   const msg = estado === 'confirmado'
-    ? hola + pedido + ' quedó confirmado' + (Number(v('total')) ? ' (total ' + pesos_(Number(v('total'))) + ')' : '') + '. ¡Gracias por tu compra!'
+    ? hola + pedido + ' quedó confirmado:\n' +
+      String(v('detalle')).split('\n').map(l => l.trim()).filter(Boolean).map(l => '• ' + l.replace(/^(\d+x\s*)\[[^\]]*\]\s*/, '$1')).join('\n') +
+      (Number(v('total')) ? '\nTotal: ' + pesos_(Number(v('total'))) : '') + '\n¡Gracias por tu compra!'
     : estado === 'cancelado'
     ? hola + pedido + ' tuvo que ser cancelado. Si querés, te ayudamos a armar otro. ¡Perdón por las molestias!'
     : estado === 'sinstock'
@@ -440,6 +469,7 @@ function linkSegunEstado_(hoja, c, fila, d, textoActual, estado, nota) {
       '. ¿Te mandamos lo que tenemos o preferís cambiarlo por otro producto?'
     : hola + 'Recibimos tu pedido' + (codigo ? ' #' + codigo : '') + '. ';
   const url = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(msg);
+  if (texto === actual.texto && url === actual.url) return;    // ya está bien (mismo texto y mismo mensaje)
   // Link común (no fórmula), así anda en cualquier idioma de la planilla
   celda.setRichTextValue(SpreadsheetApp.newRichTextValue().setText(texto).setLinkUrl(url).build());
 }
