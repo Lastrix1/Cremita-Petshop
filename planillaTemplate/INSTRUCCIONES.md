@@ -91,8 +91,13 @@ Después de pegar el script, recargá la planilla (F5): arriba aparece el menú 
 4. **Cancelar un pedido**: tildá *cancelado*. Si estaba confirmado, el stock vuelve; la fila queda tachada
    y en *whatsapp* aparece **Avisar cancelación**. Los links abren el chat del comprador con el mensaje ya escrito; lo mandás vos.
    Mientras el pedido está pendiente, *whatsapp* dice **Escribirle** (abre el chat con un saludo, para consultarle algo antes de confirmar o cancelar).
-5. **Cremita → Borrar pedidos cancelados**: borra las filas tachadas (pregunta antes).
-6. **Cremita → Revisar pedidos y stock**: si algún pedido quedó desparejo (por ejemplo, después de clickear muy rápido).
+5. **Si no alcanza el stock** al tildar *confirmado*: no se confirma y el link pasa a **Avisar falta de stock**
+   (le dice al cliente qué falta y cuánto hay). Después de hablar con el cliente podés **editar el pedido en *detalle***:
+   una línea por producto, `cantidad x nombre` (ej: `1x Collar ajustable M`). Cambiá cantidades, borrá líneas o agregá
+   productos (Ctrl+Enter para pasar de línea). Se recalcula el total solo y queda una nota "Editado a mano".
+   Después tildá *confirmado* o *cancelado*. Un pedido confirmado no se puede editar: destildalo primero.
+6. **Cremita → Borrar pedidos cancelados**: borra las filas tachadas (pregunta antes).
+7. **Cremita → Revisar pedidos y stock**: si algún pedido quedó desparejo (por ejemplo, después de clickear muy rápido).
 
-Las columnas se buscan por el **título**, así que se pueden mover de lugar, pero no cambiarles el nombre.
+La columna *items* queda oculta (la usa el script). Las columnas se buscan por el **título**, así que se pueden mover de lugar, pero no cambiarles el nombre.
 No borres a mano un pedido confirmado que querés cancelar: primero tildá *cancelado* para que vuelva el stock.

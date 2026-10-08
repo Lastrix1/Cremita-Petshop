@@ -15,6 +15,10 @@
 //  5. En la celda de "stock": -3 → baja 3; 9+5 → hace la cuenta (14);
 //     8 → queda en 8. Nunca baja de 0.
 //  6. Si se agrega un producto nuevo sin "id", le pone uno solo.
+//  7. Si al confirmar no alcanza el stock, el link pasa a "Avisar falta de stock".
+//     El pedido se puede editar a mano en "detalle" (mientras no esté confirmado):
+//     cambiar "3x" por "1x", borrar una línea o agregar "1x Nombre del producto".
+//     El script recalcula el total y lo que se descuenta.
 //
 // Menú "Cremita" (arriba en la planilla):
 //   · Preparar planilla        → agrega las columnas nuevas que falten (se puede usar siempre)
@@ -126,6 +130,8 @@ function prepararPlanilla() {
     // Rehace los links de WhatsApp de todos los pedidos (arregla los que hayan quedado con error)
     const hoja = libro.getSheetByName(HOJA_PEDIDOS), c = columnas_(hoja);
     if (c.whatsapp && hoja.getLastRow() > 1) hoja.getRange(2, c.whatsapp, hoja.getLastRow() - 1, 1).clearContent();
+    const cPed = columnas_(libro.getSheetByName(HOJA_PEDIDOS));
+    if (cPed.items) libro.getSheetByName(HOJA_PEDIDOS).hideColumns(cPed.items);   // es para el script, no hace falta verla
     revisarPedidos_();
     return a;
   });
@@ -180,9 +186,65 @@ function onEdit(e) {
   if (nombre !== HOJA_PEDIDOS) return;
 
   const c = columnas_(hoja);
+  const unaCelda = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
+  if (unaCelda && e.range.getColumn() === c.detalle && e.range.getRow() > 1) {
+    conCandado_(() => { editarDetalle_(e, hoja, c); revisarPedidos_(); }, true);
+    return;
+  }
   if (!tocada(c.confirmado) && !tocada(c.cancelado)) return;
   // Con el candado los clics esperan su turno; cada vuelta revisa TODOS los pedidos
   conCandado_(() => revisarPedidos_(), true);
+}
+
+// Editar un pedido a mano en "detalle": una línea por producto, "cantidad x nombre".
+// Lo de "($...)" del final se ignora (el precio sale de Productos). Cantidad 0 = se saca.
+function editarDetalle_(e, hoja, c) {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const celda = e.range, fila = celda.getRow();
+  const anterior = e.oldValue === undefined ? '' : e.oldValue;
+  const volver = (titulo, msg) => { celda.setValue(anterior); libro.toast(msg, titulo, 10); };
+  const v = t => (c[t] ? hoja.getRange(fila, c[t]).getValue() : '');
+
+  if (v('descontado') === true || v('confirmado') === true)
+    return volver('No se cambió', 'El pedido está confirmado: destildá "confirmado" (vuelve el stock), editalo y confirmalo de nuevo.');
+  if (v('cancelado') === true)
+    return volver('No se cambió', 'El pedido está cancelado: destildá "cancelado" para editarlo.');
+
+  const productos = leerProductos_(libro);
+  const porNombre = {};
+  // Sin mayúsculas ni espacios de más, y sin lo que vaya entre corchetes al principio ("[Producto] ...")
+  const normal = t => String(t).toLowerCase().replace(/^\s*\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim();
+  Object.keys(productos).forEach(id => { porNombre[normal(productos[id].nombre)] = id; });
+
+  const cantidades = {}, orden = [], errores = [];
+  String(celda.getValue()).split(/\n/).map(l => l.trim()).filter(Boolean).forEach(linea => {
+    const m = linea.match(/^(\d+)\s*(?:[xX×]\s*)?(.+?)\s*(?:\(\s*\$[^)]*\))?$/);
+    const id = m && porNombre[normal(m[2])];
+    if (!m) { errores.push('"' + linea + '" (falta la cantidad, ej: 2x ' + linea + ')'); return; }
+    if (!id) { errores.push('"' + m[2] + '" no está en Productos'); return; }
+    const cant = Math.min(99, parseInt(m[1], 10));
+    if (!cant) return;                                          // 0x → se saca del pedido
+    if (!(id in cantidades)) orden.push(id);
+    cantidades[id] = (cantidades[id] || 0) + cant;
+  });
+
+  if (errores.length) return volver('Revisá el detalle', 'No se cambió el pedido: ' + errores.join(' · ') + '. Escribí el nombre igual que en Productos.');
+  if (!orden.length) return volver('Pedido vacío', 'El pedido quedó sin productos. Si no va, tildá "cancelado".');
+
+  let total = 0;
+  const items = orden.map(id => ({ id, cant: cantidades[id] }));
+  const detalle = items.map(it => {
+    const p = productos[it.id];
+    total += p.precio * it.cant;
+    return it.cant + 'x ' + p.nombre + ' (' + pesos_(p.precio * it.cant) + ')';
+  }).join('\n');
+
+  celda.setValue(detalle);
+  celda.setNote('Editado a mano el ' + Utilities.formatDate(new Date(), libro.getSpreadsheetTimeZone(), 'dd/MM HH:mm'));
+  if (c.total) hoja.getRange(fila, c.total).setValue(total);
+  if (c.items) hoja.getRange(fila, c.items).setValue(JSON.stringify(items));
+  if (c.confirmado) hoja.getRange(fila, c.confirmado).setNote('');   // se saca el aviso de falta de stock
+  libro.toast('Nuevo total: ' + pesos_(total) + '. Ya lo podés confirmar.', 'Pedido editado', 6);
 }
 
 // Celda de stock:
@@ -260,7 +322,8 @@ function revisarPedidos_() {
 
     if (confirmado === descontado) {                            // el stock ya está bien
       if (confirmado && notas[i][0]) hoja.getRange(fila, c.confirmado).setNote('');
-      linkSegunEstado_(hoja, c, fila, d, links[i][0], cancelado ? 'cancelado' : confirmado ? 'confirmado' : '');
+      const sinStock = !cancelado && !confirmado && String(notas[i][0]).startsWith('No alcanza');
+      linkSegunEstado_(hoja, c, fila, d, links[i][0], cancelado ? 'cancelado' : confirmado ? 'confirmado' : sinStock ? 'sinstock' : '', notas[i][0]);
       continue;
     }
     let items;
@@ -279,8 +342,8 @@ function revisarPedidos_() {
         celda.setValue(false);                                  // no se confirma
         const aviso = 'No alcanza el stock: ' + faltan.join(', ');
         celda.setNote(aviso);
-        libro.toast(aviso, 'Pedido ' + v(d, 'pedido') + ' sin confirmar', 10);
-        linkSegunEstado_(hoja, c, fila, d, links[i][0], '');
+        libro.toast(aviso + '. Avisale al cliente con el link de "whatsapp" y, si hace falta, editá el detalle.', 'Pedido ' + v(d, 'pedido') + ' sin confirmar', 12);
+        linkSegunEstado_(hoja, c, fila, d, links[i][0], 'sinstock', aviso);
         continue;
       }
       items.forEach(it => { const p = productos[String(it.id)]; if (conStock(p)) { p.stock -= it.cant; stockCambiado[it.id] = p; } });
@@ -353,12 +416,13 @@ function prepararHoja_(hoja, nuevas) {
 
 // Columna "whatsapp" según el estado del pedido (solo la reescribe si cambió):
 //   pendiente → "Escribirle" · confirmado → "Avisar confirmación" · cancelado → "Avisar cancelación"
-function linkSegunEstado_(hoja, c, fila, d, textoActual, estado) {
+//   no alcanzó el stock al confirmar → "Avisar falta de stock"
+function linkSegunEstado_(hoja, c, fila, d, textoActual, estado, nota) {
   if (!c.whatsapp) return;
   const v = t => (c[t] ? d[c[t] - 1] : '');
   const tel = numeroWhatsApp_(v('telefono'));
   const celda = hoja.getRange(fila, c.whatsapp);
-  const textos = { '': 'Escribirle', confirmado: 'Avisar confirmación', cancelado: 'Avisar cancelación' };
+  const textos = { '': 'Escribirle', confirmado: 'Avisar confirmación', cancelado: 'Avisar cancelación', sinstock: 'Avisar falta de stock' };
   const texto = tel ? textos[estado] : '';
   if (texto === String(textoActual)) return;                   // ya está bien
   if (!texto) { celda.clearContent(); return; }
@@ -370,6 +434,10 @@ function linkSegunEstado_(hoja, c, fila, d, textoActual, estado) {
     ? hola + pedido + ' quedó confirmado' + (Number(v('total')) ? ' (total ' + pesos_(Number(v('total'))) + ')' : '') + '. ¡Gracias por tu compra!'
     : estado === 'cancelado'
     ? hola + pedido + ' tuvo que ser cancelado. Si querés, te ayudamos a armar otro. ¡Perdón por las molestias!'
+    : estado === 'sinstock'
+    ? hola + 'Sobre tu pedido' + (codigo ? ' #' + codigo : '') + ': no nos alcanza el stock de ' +
+      String(nota || '').replace(/^No alcanza el stock:\s*/, '').replace(/\(pide (\d+), hay (\d+)\)/g, '(pediste $1, tenemos $2)') +
+      '. ¿Te mandamos lo que tenemos o preferís cambiarlo por otro producto?'
     : hola + 'Recibimos tu pedido' + (codigo ? ' #' + codigo : '') + '. ';
   const url = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(msg);
   // Link común (no fórmula), así anda en cualquier idioma de la planilla

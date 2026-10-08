@@ -951,3 +951,25 @@ img {
   background: var(--color-buscador-fondo); outline: none;
 }
 .carrito-datos input:focus { border-color: var(--color-buscador-marco-activo); }
+
+/* Errores al pedir: bien visibles (ícono + borde grueso + negrita, no solo color) */
+.carrito-aviso:not([hidden]) {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 10px 12px; border-radius: 10px;
+  background: #fdecea; color: #8a1c1c;
+  border: 2px solid #8a1c1c; border-left-width: 6px;
+  font-size: 15px; font-weight: 600; line-height: 1.35;
+}
+.carrito-aviso .ti { font-size: 20px; flex: none; }
+.carrito-datos input.con-error { border: 3px solid #8a1c1c; background: #fdecea; }
+.carrito-items.con-error .carrito-vacio {
+  color: #8a1c1c; font-weight: 700;
+  border: 2px dashed #8a1c1c; border-radius: 10px; margin: 12px 0; padding: 24px 12px;
+}
+.sacudir { animation: sacudir .4s ease; }
+@keyframes sacudir {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+@media (prefers-reduced-motion: reduce) { .sacudir { animation: none; } }

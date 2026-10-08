@@ -172,6 +172,7 @@ function renderCarrito() {
   $("contador").hidden = unidades === 0; // sin productos, no se muestra el contador
   $("total").textContent = formatoPrecio(calcularTotal());
   $("carrito-aviso").hidden = true;
+  $("carrito-items").classList.remove("con-error");
 
   $("carrito-items").innerHTML = ids.length
     ? ids
@@ -261,11 +262,33 @@ function normalizarCelular(texto) {
   return /^[123]\d{9}$/.test(d) ? d : "";
 }
 
+// Error bien visible: cartel con ícono, el campo marcado y un "sacudón" para que se note
 function avisar(texto, campo) {
-  $("carrito-aviso").textContent = texto;
-  $("carrito-aviso").hidden = false;
-  if (campo) $(campo).focus();
+  const aviso = $("carrito-aviso");
+  aviso.innerHTML = `<i class="ti ti-alert-triangle" aria-hidden="true"></i> <span>${escapar(texto)}</span>`;
+  aviso.hidden = false;
+  aviso.setAttribute("role", "alert");
+  aviso.classList.remove("sacudir");
+  void aviso.offsetWidth; // reinicia la animación si se repite el error
+  aviso.classList.add("sacudir");
+  aviso.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  if (campo) {
+    $(campo).classList.add("con-error");
+    $(campo).setAttribute("aria-invalid", "true");
+    $(campo).focus();
+  } else {
+    $("carrito-items").classList.add("con-error");
+  }
 }
+
+// Al corregir un campo se le saca la marca de error
+["comprador-nombre", "comprador-telefono"].forEach((id) =>
+  $(id).addEventListener("input", () => {
+    $(id).classList.remove("con-error");
+    $(id).removeAttribute("aria-invalid");
+    $("carrito-aviso").hidden = true;
+  })
+);
 
 function enviarWhatsApp() {
   const ids = Object.keys(carrito);
