@@ -10,7 +10,7 @@
 
 // Número de WhatsApp en formato internacional, sin "+", espacios ni guiones.
 // Argentina: 549 + código de área sin 0 + número sin 15 → "5491123456789"
-const WHATSAPP = "5491165672883";
+const WHATSAPP = "5491128796683";
 
 const INSTAGRAM_USUARIO = "cremitapetshop"; // lo que va después de instagram.com/
 const FACEBOOK_USUARIO = "cremitapetshop";  // lo que va después de facebook.com/

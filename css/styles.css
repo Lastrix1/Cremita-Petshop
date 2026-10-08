@@ -936,3 +936,18 @@ img {
 .btn-agregar:disabled,
 .item-cantidad button:disabled { opacity: .35; cursor: not-allowed; }
 .cargando { grid-column: 1 / -1; text-align: center; color: var(--color-texto-suave); padding: 32px 0; }
+
+/* Mensaje en el carrito después de mandar el pedido */
+.pedido-enviado { text-align: center; padding: 24px 8px; line-height: 1.5; }
+.pedido-enviado p + p { margin-top: 10px; }
+.pedido-enviado a { color: inherit; font-weight: 600; text-decoration: underline; }
+
+/* Nombre y celular del comprador (en el pie del carrito) */
+.carrito-datos { display: grid; gap: 4px; }
+.carrito-datos label { font-size: 13px; font-weight: 600; color: var(--color-texto-suave); }
+.carrito-datos input {
+  font: inherit; padding: 8px 14px; margin-bottom: 6px;
+  border: 2px solid var(--color-buscador-marco); border-radius: 999px;
+  background: var(--color-buscador-fondo); outline: none;
+}
+.carrito-datos input:focus { border-color: var(--color-buscador-marco-activo); }

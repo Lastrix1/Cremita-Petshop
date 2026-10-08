@@ -1,4 +1,5 @@
 const CLAVE_CARRITO = "cremita-carrito";
+const CLAVE_COMPRADOR = "cremita-comprador"; // nombre y celular, para no escribirlos cada vez
 
 const $ = (id) => document.getElementById(id);
 const formatoPrecio = (n) => "$" + Math.round(n).toLocaleString("es-AR");
@@ -11,6 +12,7 @@ let filtro = { animal: "", tipo: "", origen: "" };
 let menuAbierto = null; // clave del submenú desplegado, ej: "animal:Perros" o "tipo:Comida"
 let busqueda = "";
 let carrito = cargarCarrito(); // { [idProducto]: cantidad }
+let ultimoPedido = null; // { codigo, url } del último pedido enviado, para el mensaje de "¡Gracias!"
 
 // ---------- Persistencia ----------
 
@@ -152,6 +154,7 @@ function cambiarCantidad(id, delta) {
   const nueva = Math.min((carrito[id] || 0) + delta, maximoPermitido(p)); // no deja pasar el stock
   if (nueva > 0) carrito[id] = nueva;
   else delete carrito[id];
+  if (delta > 0) ultimoPedido = null; // empezó otro pedido: se saca el "¡Gracias!"
   guardarCarrito();
   renderCarrito();
   renderGrilla(); // para activar o desactivar el "+" si se llegó al stock
@@ -189,6 +192,12 @@ function renderCarrito() {
             </div>`;
         })
         .join("")
+    : ultimoPedido
+    ? `<div class="pedido-enviado">
+         <p><strong>¡Gracias por tu pedido!</strong></p>
+         <p>${ultimoPedido.codigo ? `Tu pedido <strong>#${ultimoPedido.codigo}</strong> se abrió en WhatsApp.` : "Tu pedido se abrió en WhatsApp."} Mandá el mensaje para confirmarlo.</p>
+         <p>¿No se abrió? <a href="${ultimoPedido.url}" target="_blank" rel="noopener">Abrir WhatsApp de nuevo</a></p>
+       </div>`
     : `<p class="carrito-vacio">Todavía no agregaste productos.</p>`;
 }
 
@@ -206,13 +215,67 @@ function cerrarCarrito() {
   document.body.classList.remove("sin-scroll");
 }
 
+// ---------- Datos del comprador ----------
+
+function cargarComprador() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CLAVE_COMPRADOR)) || {};
+    $("comprador-nombre").value = c.nombre || "";
+    $("comprador-telefono").value = c.telefono || "";
+  } catch {
+    // sin almacenamiento: se escriben cada vez
+  }
+}
+
+function leerComprador() {
+  const nombre = $("comprador-nombre").value.replace(/\s+/g, " ").trim();
+  const telefono = $("comprador-telefono").value.trim();
+  try {
+    localStorage.setItem(CLAVE_COMPRADOR, JSON.stringify({ nombre, telefono }));
+  } catch {}
+  return { nombre, telefono };
+}
+
+// Nombre: solo letras (con tildes y ñ) y espacios entre palabras
+function nombreValido(nombre) {
+  return /^\p{L}{2,}( \p{L}+)*$/u.test(nombre) && nombre.length <= 40;
+}
+
+// Celular argentino → 10 números (código de área + número), o "" si no es válido.
+// Acepta: "11 2345-6789", "011 15 2345-6789", "+54 9 11 2345 6789", "(0351) 15 123-4567"
+function normalizarCelular(texto) {
+  let d = texto.replace(/\D/g, "");
+  if (d.startsWith("549")) d = d.slice(3);
+  else if (d.startsWith("54")) d = d.slice(2);
+  d = d.replace(/^0/, "");
+  if (d.length === 12) {
+    // Saca el "15" que va después del código de área (de 2, 3 o 4 números)
+    for (const area of [2, 3, 4]) {
+      if (d.slice(area, area + 2) === "15" && (area !== 2 || d.startsWith("11"))) {
+        d = d.slice(0, area) + d.slice(area + 2);
+        break;
+      }
+    }
+  }
+  // 10 números y código de área argentino (empieza con 1, 2 o 3)
+  return /^[123]\d{9}$/.test(d) ? d : "";
+}
+
+function avisar(texto, campo) {
+  $("carrito-aviso").textContent = texto;
+  $("carrito-aviso").hidden = false;
+  if (campo) $(campo).focus();
+}
+
 function enviarWhatsApp() {
   const ids = Object.keys(carrito);
-  if (!ids.length) {
-    $("carrito-aviso").textContent = "Agregá al menos un producto para hacer el pedido.";
-    $("carrito-aviso").hidden = false;
-    return;
-  }
+  if (!ids.length) return avisar("Agregá al menos un producto para hacer el pedido.");
+
+  const comprador = leerComprador();
+  if (!comprador.nombre) return avisar("Escribí tu nombre para hacer el pedido.", "comprador-nombre");
+  if (!nombreValido(comprador.nombre)) return avisar("El nombre solo puede tener letras y espacios.", "comprador-nombre");
+  const digitos = normalizarCelular(comprador.telefono);
+  if (!digitos) return avisar("Revisá tu celular: tiene que tener código de área y 10 números en total, ej: 11 2345 6789.", "comprador-telefono");
 
   const lineas = ids.map((id) => {
     const p = buscarProducto(id);
@@ -221,17 +284,31 @@ function enviarWhatsApp() {
 
   // Se anota el pedido en la planilla con un código; el WhatsApp lleva ese mismo código
   const codigo = nuevoCodigoPedido();
-  const anotado = registrarPedido({ pedido: codigo, items: ids.map((id) => ({ id, cant: carrito[id] })) });
+  const anotado = registrarPedido({
+    pedido: codigo,
+    nombre: comprador.nombre,
+    telefono: digitos,
+    items: ids.map((id) => ({ id, cant: carrito[id] })),
+  });
 
   const mensaje = [
     CONFIG.saludo,
     ...(anotado ? [`Pedido #${codigo}`] : []),
+    `A nombre de: ${comprador.nombre}`,
     ...lineas,
     "",
     `Total: ${formatoPrecio(calcularTotal())}`,
   ].join("\n");
 
-  window.open(`https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(mensaje)}`, "_blank", "noopener");
+  const url = `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(mensaje)}`;
+  window.open(url, "_blank", "noopener");
+
+  // Pedido hecho: se vacía el carrito y queda el aviso con el link por si WhatsApp no se abrió
+  ultimoPedido = { codigo: anotado ? codigo : "", url };
+  carrito = {};
+  guardarCarrito();
+  renderCarrito();
+  renderGrilla();
 }
 
 // ---------- Datos de contacto (vienen de config.js) ----------
@@ -314,14 +391,17 @@ document.addEventListener("keydown", (e) => {
 $("enviar-whatsapp").addEventListener("click", enviarWhatsApp);
 $("vaciar-carrito").addEventListener("click", () => {
   carrito = {};
+  ultimoPedido = null; // también saca el cartel de "¡Gracias por tu pedido!"
   guardarCarrito();
   renderCarrito();
+  renderGrilla(); // vuelve a activar los "agregar" que estaban al tope del stock
 });
 
 // ---------- Arranque ----------
 
 async function iniciar() {
   renderContacto();
+  cargarComprador();
   if (typeof PLANILLA !== "undefined" && (PLANILLA.productosCsv || PLANILLA.pedidosUrl)) {
     $("grilla").innerHTML = `<p class="cargando">Cargando productos…</p>`;
     try {

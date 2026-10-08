@@ -75,3 +75,24 @@ Abrí `borradores/prueba-planilla/index.html` con Go Live y fijate:
 - **No aparecen los productos nuevos:** Google tarda hasta 5 minutos en actualizar lo publicado.
 - **Si la planilla falla**, la página muestra los productos de `js/productos.js` (no queda en blanco).
 - **Cambiaste el script:** hay que volver a **Implementar → Gestionar implementaciones → editar (lápiz) → Versión: Nueva → Implementar**. El link `/exec` sigue siendo el mismo.
+
+---
+
+## Menú "Cremita" y columnas nuevas
+
+Después de pegar el script, recargá la planilla (F5): arriba aparece el menú **Cremita**.
+
+1. **Cremita → Preparar planilla**: agrega las columnas **nombre**, **telefono**, **cancelado** y **whatsapp** en Pedidos
+   (y saca las columnas ▲ ▼ / ajustar de versiones anteriores). Se puede usar las veces que quieras.
+2. **Ajustar stock** en la misma celda de *stock*: escribí `-3` y Enter para restar 3.
+   Para sumar, escribí la cuenta: si hay 9 y entraron 5, escribí `9+5` (queda 14).
+   Un número solo (`8`) deja el stock en ese número. Nunca baja de 0; abajo a la derecha aparece cómo quedó.
+3. **Confirmar un pedido**: tildá *confirmado*. Baja el stock y en *whatsapp* aparece **Avisar confirmación**.
+4. **Cancelar un pedido**: tildá *cancelado*. Si estaba confirmado, el stock vuelve; la fila queda tachada
+   y en *whatsapp* aparece **Avisar cancelación**. Los links abren el chat del comprador con el mensaje ya escrito; lo mandás vos.
+   Mientras el pedido está pendiente, *whatsapp* dice **Escribirle** (abre el chat con un saludo, para consultarle algo antes de confirmar o cancelar).
+5. **Cremita → Borrar pedidos cancelados**: borra las filas tachadas (pregunta antes).
+6. **Cremita → Revisar pedidos y stock**: si algún pedido quedó desparejo (por ejemplo, después de clickear muy rápido).
+
+Las columnas se buscan por el **título**, así que se pueden mover de lugar, pero no cambiarles el nombre.
+No borres a mano un pedido confirmado que querés cancelar: primero tildá *cancelado* para que vuelva el stock.
