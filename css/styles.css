@@ -100,13 +100,13 @@ img {
   top: 48%;
 }
 
-/* Cada huellita se "estampa", dura un ratito y se borra:
-   así solo se ven las últimas 3 o 4 y parece que el perrito avanza */
+/* Cada huellita se "estampa", queda un rato y se va borrando de a poco:
+   se ven unas 8 o 9 detrás del perrito, las más viejas cada vez más suaves */
 @keyframes pisada {
   0%   { opacity: 0; scale: 1.4; }
   2%   { opacity: 1; scale: 1; }
-  11%  { opacity: 1; }
-  18%  { opacity: 0; }
+  24%  { opacity: 1; }
+  44%  { opacity: 0; }
   100% { opacity: 0; }
 }
 
@@ -955,7 +955,7 @@ img {
 /* Errores al pedir: bien visibles (ícono + borde grueso + negrita, no solo color) */
 .carrito-aviso:not([hidden]) {
   display: flex; gap: 8px; align-items: flex-start;
-  padding: 10px 12px; border-radius: 10px;
+  padding: 10px 12px; border-radius: 0;
   background: #fdecea; color: #8a1c1c;
   border: 2px solid #8a1c1c; border-left-width: 6px;
   font-size: 15px; font-weight: 600; line-height: 1.35;

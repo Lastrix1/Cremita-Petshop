@@ -94,7 +94,7 @@ function doPost(e) {
     poner('detalle', detalle);
     poner('total', total);
     CASILLAS_PEDIDOS.forEach(t => poner(t, false));
-    poner('items', JSON.stringify(items));
+    poner('items', JSON.stringify({ items, texto: detalle }));
     hoja.appendRow(fila);
 
     const n = hoja.getLastRow();
@@ -197,7 +197,7 @@ function onEdit(e) {
   const c = columnas_(hoja);
   const unaCelda = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
   if (unaCelda && e.range.getColumn() === c.detalle && e.range.getRow() > 1) {
-    conCandado_(() => { editarDetalle_(e, hoja, c); revisarPedidos_(); }, true);
+    conCandado_(() => editarDetalle_(e, hoja, c), true);
     return;
   }
   if (!tocada(c.confirmado) && !tocada(c.cancelado)) return;
@@ -205,31 +205,30 @@ function onEdit(e) {
   conCandado_(() => revisarPedidos_(), true);
 }
 
-// Editar un pedido a mano en "detalle": una línea por producto, "cantidad x nombre".
-// Lo de "($...)" del final se ignora (el precio sale de Productos). Cantidad 0 = se saca.
-function editarDetalle_(e, hoja, c) {
-  const libro = SpreadsheetApp.getActiveSpreadsheet();
-  const celda = e.range, fila = celda.getRow();
-  const anterior = e.oldValue === undefined ? '' : e.oldValue;
-  const volver = (titulo, msg) => { celda.setValue(anterior); libro.toast(msg, titulo, 10); };
-  const v = t => (c[t] ? hoja.getRange(fila, c[t]).getValue() : '');
+// ---------- Detalle del pedido ----------
+// La columna "detalle" es la que manda: una línea por producto, "cantidad x nombre".
+// La columna oculta "items" guarda lo último que el script leyó/descontó: { items, texto }.
 
-  // Primero se acomodan los clics que estén pendientes (por ejemplo, si recién destildaste "confirmado")
-  revisarPedidos_();
+// Lee lo guardado en "items" (acepta el formato viejo, que era solo la lista)
+function leerGuardado_(crudo) {
+  try {
+    const g = JSON.parse(crudo || '[]');
+    return Array.isArray(g) ? { items: g, texto: null } : { items: g.items || [], texto: g.texto == null ? null : String(g.texto) };
+  } catch (err) {
+    return { items: [], texto: null };
+  }
+}
 
-  if (v('descontado') === true || v('confirmado') === true)
-    return volver('No se cambió', 'El pedido está confirmado: destildá "confirmado" (vuelve el stock), editalo y confirmalo de nuevo.');
-  if (v('cancelado') === true)
-    return volver('No se cambió', 'El pedido está cancelado: destildá "cancelado" para editarlo.');
-
-  const productos = leerProductos_(libro);
-  const porNombre = {};
+// Convierte el texto de "detalle" en productos. Lo de "($...)" se ignora (el precio sale de Productos).
+// Devuelve { items, detalle (prolijo), total, errores }.
+function interpretarDetalle_(texto, productos) {
   // Sin mayúsculas ni espacios de más, y sin lo que vaya entre corchetes al principio ("[Producto] ...")
   const normal = t => String(t).toLowerCase().replace(/^\s*\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim();
+  const porNombre = {};
   Object.keys(productos).forEach(id => { porNombre[normal(productos[id].nombre)] = id; });
 
   const cantidades = {}, orden = [], errores = [];
-  String(celda.getValue()).split(/\n/).map(l => l.trim()).filter(Boolean).forEach(linea => {
+  String(texto).split(/\n/).map(l => l.trim()).filter(Boolean).forEach(linea => {
     const m = linea.match(/^(\d+)\s*(?:[xX×]\s*)?(.+?)\s*(?:\(\s*\$[^)]*\))?$/);
     const id = m && porNombre[normal(m[2])];
     if (!m) { errores.push('"' + linea + '" (falta la cantidad, ej: 2x ' + linea + ')'); return; }
@@ -239,9 +238,7 @@ function editarDetalle_(e, hoja, c) {
     if (!(id in cantidades)) orden.push(id);
     cantidades[id] = (cantidades[id] || 0) + cant;
   });
-
-  if (errores.length) return volver('Revisá el detalle', 'No se cambió el pedido: ' + errores.join(' · ') + '. Escribí el nombre igual que en Productos.');
-  if (!orden.length) return volver('Pedido vacío', 'El pedido quedó sin productos. Si no va, tildá "cancelado".');
+  if (!errores.length && !orden.length) errores.push('el pedido quedó sin productos (si no va, tildá "cancelado")');
 
   let total = 0;
   const items = orden.map(id => ({ id, cant: cantidades[id] }));
@@ -250,13 +247,58 @@ function editarDetalle_(e, hoja, c) {
     total += p.precio * it.cant;
     return it.cant + 'x ' + p.nombre + ' (' + pesos_(p.precio * it.cant) + ')';
   }).join('\n');
+  return { items, detalle, total, errores };
+}
 
-  celda.setValue(detalle);
-  celda.setNote('Editado a mano el ' + Utilities.formatDate(new Date(), libro.getSpreadsheetTimeZone(), 'dd/MM HH:mm'));
-  if (c.total) hoja.getRange(fila, c.total).setValue(total);
-  if (c.items) hoja.getRange(fila, c.items).setValue(JSON.stringify(items));
+const mismosItems_ = (a, b) => JSON.stringify(a.map(x => [String(x.id), x.cant])) === JSON.stringify(b.map(x => [String(x.id), x.cant]));
+
+// Se editó "detalle" a mano
+function editarDetalle_(e, hoja, c) {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const celda = e.range, fila = celda.getRow();
+  const v = t => (c[t] ? hoja.getRange(fila, c[t]).getValue() : '');
+
+  // Primero se acomodan los clics pendientes. Si ya tildaste "confirmado", acá se confirma
+  // con el detalle NUEVO (no importa en qué orden Google ejecute las cosas).
+  revisarPedidos_();
+
+  const guardado = leerGuardado_(v('items'));
+  const r = interpretarDetalle_(celda.getValue(), leerProductos_(libro));
+  const confirmado = v('descontado') === true || v('confirmado') === true;
+
+  if (confirmado) {
+    if (!r.errores.length && mismosItems_(r.items, guardado.items)) return;   // es lo que se confirmó: todo bien
+    celda.setValue(guardado.texto != null ? guardado.texto : (e.oldValue || ''));
+    libro.toast('El pedido está confirmado: destildá "confirmado" (vuelve el stock), editalo y confirmalo de nuevo.', 'No se cambió', 10);
+    return;
+  }
+  if (v('cancelado') === true) {
+    celda.setValue(guardado.texto != null ? guardado.texto : (e.oldValue || ''));
+    libro.toast('El pedido está cancelado: destildá "cancelado" para editarlo.', 'No se cambió', 10);
+    return;
+  }
+  if (r.errores.length) {
+    celda.setValue(e.oldValue === undefined ? (guardado.texto || '') : e.oldValue);
+    libro.toast('No se cambió el pedido: ' + r.errores.join(' · ') + '. Escribí el nombre igual que en Productos.', 'Revisá el detalle', 10);
+    return;
+  }
+  if (mismosItems_(r.items, guardado.items) && guardado.texto !== null) {
+    celda.setValue(guardado.texto);                             // mismos productos: queda como estaba
+    return;
+  }
+  guardarDetalle_(hoja, c, fila, r);
   if (c.confirmado) hoja.getRange(fila, c.confirmado).setNote('');   // se saca el aviso de falta de stock
-  libro.toast('Nuevo total: ' + pesos_(total) + '. Ya lo podés confirmar.', 'Pedido editado', 6);
+  libro.toast('Nuevo total: ' + pesos_(r.total) + '. Ya lo podés confirmar.', 'Pedido editado', 6);
+  revisarPedidos_();                                            // actualiza el link de whatsapp
+}
+
+// Escribe detalle prolijo, total e items
+function guardarDetalle_(hoja, c, fila, r) {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  if (c.detalle) hoja.getRange(fila, c.detalle).setValue(r.detalle)
+    .setNote('Editado a mano el ' + Utilities.formatDate(new Date(), libro.getSpreadsheetTimeZone(), 'dd/MM HH:mm'));
+  if (c.total) hoja.getRange(fila, c.total).setValue(r.total);
+  if (c.items) hoja.getRange(fila, c.items).setValue(JSON.stringify({ items: r.items, texto: r.detalle }));
 }
 
 // Google toma "13-5" como la fecha 13 de mayo. Se recupera la cuenta: 13 − 5 = 8.
@@ -351,10 +393,31 @@ function revisarPedidos_() {
       linkSegunEstado_(hoja, c, fila, d, links[i][0], cancelado ? 'cancelado' : confirmado ? 'confirmado' : sinStock ? 'sinstock' : '', notas[i][0]);
       continue;
     }
-    let items;
-    try { items = JSON.parse(v(d, 'items') || '[]'); } catch (err) { items = []; }
+    const guardado = leerGuardado_(v(d, 'items'));
+    let items = guardado.items;                                 // para devolver: lo que se descontó
 
     if (confirmado) {
+      // Para confirmar manda lo que dice "detalle" AHORA (por si lo editaste recién)
+      const texto = String(v(d, 'detalle'));
+      if (guardado.texto === null || texto !== guardado.texto) {
+        const r = interpretarDetalle_(texto, productos);
+        if (r.errores.length && guardado.texto !== null) {
+          const celda = hoja.getRange(fila, c.confirmado);
+          celda.setValue(false);
+          celda.setNote('Revisá el detalle: ' + r.errores.join(' · '));
+          libro.toast('No se confirmó: ' + r.errores.join(' · ') + '.', 'Pedido ' + v(d, 'pedido') + ' sin confirmar', 10);
+          continue;
+        }
+        if (!r.errores.length && !mismosItems_(r.items, items)) {
+          guardarDetalle_(hoja, c, fila, r);                     // cambió el pedido: nuevo detalle y total
+          items = r.items;
+          if (c.detalle) d[c.detalle - 1] = r.detalle;
+          if (c.total) d[c.total - 1] = r.total;
+        } else if (!r.errores.length && guardado.texto !== null && texto !== guardado.texto) {
+          hoja.getRange(fila, c.detalle).setValue(guardado.texto); // mismos productos: queda como estaba (con sus precios)
+          if (c.detalle) d[c.detalle - 1] = guardado.texto;
+        }
+      }
       // Antes de descontar, revisa que alcance el stock de TODOS los productos del pedido
       const faltan = [];
       items.forEach(it => {
