@@ -7,7 +7,9 @@ Catálogo web de Cremita Petshop. Los clientes eligen productos y envían el ped
 | Qué | Dónde |
 |---|---|
 | Número de WhatsApp | `js/config.js` → `WHATSAPP` (también arma el teléfono y el link del pie) |
-| Productos y categorías | `js/productos.js` |
+| Productos, precios y stock | Planilla de Google (hoja **Productos**). Los links están en `js/config-planilla.js` |
+| Productos de respaldo (si la planilla falla) | `js/productos.js` |
+| Pedidos | Planilla de Google (hoja **Pedidos**): tildar *confirmado* descuenta el stock |
 | Fotos de productos | `img/productos/` y el campo `imagen` de cada producto |
 | Logo | `img/logo.png` |
 | Texto de "Quiénes somos" | `index.html`, sección `quienes-somos` |

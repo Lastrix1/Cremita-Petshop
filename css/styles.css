@@ -918,3 +918,21 @@ img {
     text-align: center;
   }
 }
+
+/* =====================================================================
+   STOCK (productos que vienen de la planilla de Google)
+   ===================================================================== */
+.tarjeta-imagen { position: relative; }
+.cartel-stock {
+  position: absolute; top: 10px; left: 10px;
+  padding: 3px 10px; border-radius: 999px;
+  background: var(--color-barra-fondo); color: var(--color-nombre-tienda);
+  font-size: 12px; font-weight: 600;
+}
+.cartel-stock.ultimas { background: #d67d09; color: #fff; }
+.tarjeta.sin-stock .tarjeta-imagen > i,
+.tarjeta.sin-stock .tarjeta-imagen > img { opacity: .35; }
+.tarjeta.sin-stock .precio { opacity: .5; }
+.btn-agregar:disabled,
+.item-cantidad button:disabled { opacity: .35; cursor: not-allowed; }
+.cargando { grid-column: 1 / -1; text-align: center; color: var(--color-texto-suave); padding: 32px 0; }

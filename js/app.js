@@ -36,6 +36,22 @@ function buscarProducto(id) {
   return PRODUCTOS.find((p) => String(p.id) === String(id));
 }
 
+// ---------- Stock (viene de la planilla; null = sin control de stock) ----------
+
+const hayStock = (p) => p.stock == null || p.stock > 0;
+const maximoPermitido = (p) => (p.stock == null ? 99 : Math.max(0, p.stock));
+
+// Saca del carrito lo que ya no hay y ajusta cantidades al stock disponible
+function ajustarCarritoAlStock() {
+  for (const id of Object.keys(carrito)) {
+    const p = buscarProducto(id);
+    const max = p ? maximoPermitido(p) : 0;
+    if (!max) delete carrito[id];
+    else if (carrito[id] > max) carrito[id] = max;
+  }
+  guardarCarrito();
+}
+
 // ---------- Catálogo ----------
 
 function botonConSubmenu(clave, etiqueta, activo, opciones) {
@@ -99,15 +115,21 @@ function renderGrilla() {
       const imagen = p.imagen
         ? `<img src="${escapar(p.imagen)}" alt="${escapar(p.nombre)}" loading="lazy">`
         : `<i class="ti ${escapar(p.icono || "ti-paw")}" aria-hidden="true"></i>`;
+      const sinStock = !hayStock(p);
+      const cartel = sinStock
+        ? `<span class="cartel-stock">Sin stock</span>`
+        : p.stock != null && p.stock <= 3
+          ? `<span class="cartel-stock ultimas">¡Últimas unidades!</span>`
+          : "";
       return `
-        <article class="tarjeta">
-          <div class="tarjeta-imagen">${imagen}</div>
+        <article class="tarjeta${sinStock ? " sin-stock" : ""}">
+          <div class="tarjeta-imagen">${imagen}${cartel}</div>
           <div class="tarjeta-cuerpo">
             <span class="tarjeta-categoria">${escapar(p.categoria)} · ${escapar(p.subcategoria)}</span>
             <h3>${escapar(p.nombre)}</h3>
             <div class="tarjeta-pie">
               <span class="precio">${formatoPrecio(p.precio)}</span>
-              <button class="btn-agregar" data-agregar="${p.id}" aria-label="Agregar ${escapar(p.nombre)}">
+              <button class="btn-agregar" data-agregar="${p.id}" aria-label="${sinStock ? "Sin stock" : "Agregar " + escapar(p.nombre)}" ${sinStock || (carrito[p.id] || 0) >= maximoPermitido(p) ? "disabled" : ""}>
                 <i class="ti ti-plus" aria-hidden="true"></i>
               </button>
             </div>
@@ -116,17 +138,23 @@ function renderGrilla() {
     })
     .join("");
 
+  $("sin-resultados").textContent = PRODUCTOS.length
+    ? "No encontramos productos con ese filtro."
+    : "Por ahora no hay productos disponibles. ¡Volvé pronto!";
   $("sin-resultados").hidden = visibles.length > 0;
 }
 
 // ---------- Carrito ----------
 
 function cambiarCantidad(id, delta) {
-  const nueva = (carrito[id] || 0) + delta;
+  const p = buscarProducto(id);
+  if (!p) return;
+  const nueva = Math.min((carrito[id] || 0) + delta, maximoPermitido(p)); // no deja pasar el stock
   if (nueva > 0) carrito[id] = nueva;
   else delete carrito[id];
   guardarCarrito();
   renderCarrito();
+  renderGrilla(); // para activar o desactivar el "+" si se llegó al stock
 }
 
 function calcularTotal() {
@@ -155,7 +183,7 @@ function renderCarrito() {
               <div class="item-cantidad">
                 <button data-restar="${p.id}" aria-label="Quitar uno">−</button>
                 <span>${carrito[id]}</span>
-                <button data-agregar="${p.id}" aria-label="Agregar uno">+</button>
+                <button data-agregar="${p.id}" aria-label="Agregar uno" ${carrito[id] >= maximoPermitido(p) ? "disabled" : ""}>+</button>
               </div>
               <span class="item-subtotal">${formatoPrecio(p.precio * carrito[id])}</span>
             </div>`;
@@ -190,7 +218,18 @@ function enviarWhatsApp() {
     const p = buscarProducto(id);
     return `• ${carrito[id]}x ${p.nombre} – ${formatoPrecio(p.precio * carrito[id])}`;
   });
-  const mensaje = [CONFIG.saludo, ...lineas, "", `Total: ${formatoPrecio(calcularTotal())}`].join("\n");
+
+  // Se anota el pedido en la planilla con un código; el WhatsApp lleva ese mismo código
+  const codigo = nuevoCodigoPedido();
+  const anotado = registrarPedido({ pedido: codigo, items: ids.map((id) => ({ id, cant: carrito[id] })) });
+
+  const mensaje = [
+    CONFIG.saludo,
+    ...(anotado ? [`Pedido #${codigo}`] : []),
+    ...lineas,
+    "",
+    `Total: ${formatoPrecio(calcularTotal())}`,
+  ].join("\n");
 
   window.open(`https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(mensaje)}`, "_blank", "noopener");
 }
@@ -279,7 +318,62 @@ $("vaciar-carrito").addEventListener("click", () => {
   renderCarrito();
 });
 
-renderContacto();
-renderFiltros();
-renderGrilla();
-renderCarrito();
+// ---------- Arranque ----------
+
+async function iniciar() {
+  renderContacto();
+  if (typeof PLANILLA !== "undefined" && (PLANILLA.productosCsv || PLANILLA.pedidosUrl)) {
+    $("grilla").innerHTML = `<p class="cargando">Cargando productos…</p>`;
+    try {
+      await cargarPlanilla();
+    } catch (error) {
+      // Si la planilla falla, se muestran los productos de js/productos.js
+      console.warn("No se pudo leer la planilla, uso js/productos.js:", error);
+    }
+  }
+  carrito = cargarCarrito();
+  ajustarCarritoAlStock();
+  renderFiltros();
+  renderGrilla();
+  renderCarrito();
+  vigilarPlanilla();
+}
+
+// ---------- Actualización automática (sin recargar la página) ----------
+
+const CADA_MS = 60000; // cada cuánto se revisa la planilla (60 segundos)
+let ultimaVersion = JSON.stringify(PRODUCTOS);
+let revisando = false;
+
+// Vuelve a leer la planilla; si algo cambió, actualiza productos, filtros y carrito
+async function revisarPlanilla() {
+  if (revisando || document.hidden) return;
+  revisando = true;
+  try {
+    await cargarPlanilla();
+    const version = JSON.stringify(PRODUCTOS);
+    if (version !== ultimaVersion) {
+      ultimaVersion = version;
+      ajustarCarritoAlStock();
+      renderFiltros();
+      renderGrilla();
+      renderCarrito();
+    }
+  } catch (error) {
+    // Si falla una revisión, queda lo que había; se reintenta en la próxima
+  } finally {
+    revisando = false;
+  }
+}
+
+function vigilarPlanilla() {
+  if (typeof PLANILLA === "undefined" || (!PLANILLA.productosCsv && !PLANILLA.pedidosUrl)) return;
+  ultimaVersion = JSON.stringify(PRODUCTOS);
+  setInterval(revisarPlanilla, CADA_MS);
+  // Al volver a la pestaña (por ejemplo, después de mandar el WhatsApp) revisa enseguida
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) revisarPlanilla();
+  });
+}
+
+iniciar();
