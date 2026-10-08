@@ -138,6 +138,7 @@ function renderCarrito() {
   const unidades = ids.reduce((s, id) => s + carrito[id], 0);
 
   $("contador").textContent = unidades;
+  $("contador").hidden = unidades === 0; // sin productos, no se muestra el contador
   $("total").textContent = formatoPrecio(calcularTotal());
   $("carrito-aviso").hidden = true;
 
@@ -192,6 +193,35 @@ function enviarWhatsApp() {
   const mensaje = [CONFIG.saludo, ...lineas, "", `Total: ${formatoPrecio(calcularTotal())}`].join("\n");
 
   window.open(`https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(mensaje)}`, "_blank", "noopener");
+}
+
+// ---------- Datos de contacto (vienen de config.js) ----------
+
+function renderContacto() {
+  // Textos simples: <span data-dato="direccion"></span> → CONFIG.direccion
+  document.querySelectorAll("[data-dato]").forEach((el) => {
+    const valor = CONFIG[el.dataset.dato] || "";
+    el.textContent = valor;
+    if (!valor) el.closest("p").hidden = true; // dato vacío: se oculta la línea
+  });
+
+  // Link del mapa: <a data-link="mapa"> → CONFIG.mapa
+  document.querySelectorAll("[data-link]").forEach((el) => {
+    const url = CONFIG[el.dataset.link];
+    if (url) el.href = url;
+    else el.removeAttribute("href"); // sin link queda como texto común
+  });
+
+  // Redes: <a data-red="instagram"> → CONFIG.instagram.url y .texto
+  document.querySelectorAll("[data-red]").forEach((el) => {
+    const red = CONFIG[el.dataset.red];
+    if (!red || !red.url) {
+      el.closest("p").hidden = true;
+      return;
+    }
+    el.href = red.url;
+    el.querySelector("span").textContent = red.texto || red.url;
+  });
 }
 
 // ---------- Eventos ----------
@@ -249,6 +279,7 @@ $("vaciar-carrito").addEventListener("click", () => {
   renderCarrito();
 });
 
+renderContacto();
 renderFiltros();
 renderGrilla();
 renderCarrito();

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Borrador: mascotas del cursor (perro y gato)</title>
+<!--
+  BORRADOR para implementar después en la página de Cremita.
+  - Si el mouse queda quieto, viene un perro o un gato (se turnan, el primero al azar).
+  - Perro: empuja el cursor con un cabezazo (versión aprobada, no tocar).
+  - Gato (cabezón kawaii): se para en las patas traseras y le pega al cursor de arriba hacia abajo.
+  - Para probarlo: abrí este archivo en el navegador y dejá el mouse quieto 3 segundos.
+  - En la página real: que aparezca a los ~8 segundos y que no se muestre en celulares.
+-->
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#FBF6EC}
+#zona{position:relative;height:100vh;background:#FBF6EC;overflow:hidden;cursor:none}
+#msg{position:absolute;top:12px;left:14px;font-size:14px;color:#7A5C43}
+#cur{position:absolute;width:18px;height:24px;pointer-events:none;z-index:5;transition:left .2s ease-out,top .2s ease-out}
+#cur.cae{transition:left .4s ease-out,top .4s cubic-bezier(.3,1.5,.6,1)}
+.bicho{position:absolute;pointer-events:none;transition:left .9s linear,top .9s linear}
+.bicho.rapido{transition:left .3s ease-out,top .3s ease-out}
+.bicho svg{width:100%;height:100%;overflow:visible}
+.bicho .t{stroke:#3a2416;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;fill:#FFFDF8}
+.bicho .n{stroke:#3a2416;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;fill:none}
+.bicho .o{fill:#3a2416}.bicho .w{fill:#fff}
+.bicho .collar{stroke:#3a2416;stroke-width:3.2;stroke-linejoin:round;fill:#d67d09}
+.bicho .rosa{fill:#F4A6A0;stroke:#3a2416;stroke-width:2}
+.sintrans,.sintrans *{transition:none!important;animation:none!important}
+.todo,.pata,.cuerpoG,.golpeG,.otraG,.piernas,.colaG,.colaP,.oreja{transform-box:view-box}
+.todo{transform-origin:66px 100px}
+.mirror{transform:scaleX(-1)}
+
+/* ---- caminar (perro y gato) ---- */
+.camina .pa,.camina .pd{animation:paso .32s ease-in-out infinite}
+.camina .pb,.camina .pc{animation:paso .32s ease-in-out infinite reverse}
+@keyframes paso{0%,100%{transform:rotate(-20deg)}50%{transform:rotate(20deg)}}
+.camina .todo{animation:bob .32s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-3px)}}
+
+/* ---- PERRO ---- */
+.perro.respira .todo{animation:respira 1.6s ease-in-out infinite}
+@keyframes respira{50%{transform:scaleY(1.02)}}
+.perro.empuja .todo{animation:cabezazo .8s cubic-bezier(.45,0,.3,1)}
+.perro.empuja .pd{animation:pasoEmp .8s ease-in-out}
+.perro.empuja .pc{animation:pasoEmp .8s ease-in-out .1s}
+.perro.empuja .pa,.perro.empuja .pb{animation:empujaAtras .8s ease-in-out}
+@keyframes cabezazo{0%{transform:none}30%{transform:translate(-5px,2px) rotate(4deg)}55%{transform:translate(10px,-2px) rotate(-4deg)}80%{transform:translate(3px,0)}100%{transform:none}}
+@keyframes pasoEmp{0%,100%{transform:none}45%{transform:rotate(-28deg)}}
+@keyframes empujaAtras{0%,100%{transform:none}50%{transform:rotate(22deg)}}
+.colaP{transform-origin:36px 54px;animation:cola .26s ease-in-out infinite}
+@keyframes cola{50%{transform:rotate(18deg)}}
+.oreja{transform-origin:96px 30px;animation:oreja 1.3s ease-in-out infinite}
+@keyframes oreja{50%{transform:rotate(-5deg)}}
+
+/* ---- GATO ---- */
+.gato .piernas{transform-origin:58px 101px;transition:transform .4s ease-in-out}
+.gato.parado .piernas{transform:scaleY(.62) skewX(-14deg)}
+.gato .cuerpoG{transform-origin:58px 80px;transition:transform .4s ease-in-out}
+.gato.parado .cuerpoG{transform:translateY(10px) rotate(-46deg)}
+.gato.parado.golpe .cuerpoG{transform:translateY(10px) rotate(-38deg)}
+.gato .golpeG{transform-origin:82px 72px;transition:transform .3s ease-out}
+.gato.parado .golpeG{transform:rotate(-95deg)}
+.gato.parado.alza .golpeG{transform:rotate(-150deg);transition:transform .28s ease-out}
+.gato.parado.golpe .golpeG{transform:rotate(-88deg);transition:transform .09s ease-in}
+.gato .otraG{transform-origin:90px 72px;transition:transform .4s ease-in-out}
+.gato.parado .otraG{transform:rotate(-70deg)}
+.colaG{transform-origin:46px 66px;animation:colag 1.5s ease-in-out infinite}
+@keyframes colag{50%{transform:rotate(-10deg)}}
+.gato.parado .colaG{animation:colaf .24s ease-in-out infinite}
+@keyframes colaf{50%{transform:rotate(14deg)}}
+</style>
+</head>
+<body>
+<div id="zona"><span id="msg">Dejá el mouse quieto 3 segundos…</span>
+<svg id="cur" viewBox="0 0 18 24" aria-hidden="true"><path d="M2 2 L2 19 L6.5 15 L9.5 22 L12.5 20.7 L9.6 14 L15.5 14 Z" fill="#fff" stroke="#1E1E1E" stroke-width="1.5" stroke-linejoin="round"/></svg>
+</div>
+<script>
+const ESPERA_MS = 3000; // en la página real: ~8000
+
+const L=(cls,x,w,top,bot)=>`<g class="pata ${cls}" style="transform-origin:${x+w/2}px ${top+4}px"><path class="t" d="M${x} ${top} L${x} ${bot-6} Q${x} ${bot} ${x+w/2} ${bot} Q${x+w} ${bot} ${x+w} ${bot-6} L${x+w} ${top}"/></g>`;
+
+const PERRO=`<svg viewBox="0 0 140 110"><g class="todo">
+<g class="colaP"><path class="t" d="M38 54 Q22 58 14 48 L21 48 L13 40 L22 42 L20 32 Q30 42 40 48"/></g>
+${L('pb',52,13,62,101)}${L('pd',88,13,62,101)}
+<path class="t" d="M34 58 Q34 44 54 44 L80 44 Q86 32 100 32 L112 50 Q106 62 101 66 Q100 80 86 80 L50 80 Q34 80 34 66 Z"/>
+${L('pa',42,13,62,101)}${L('pc',78,13,62,101)}
+<path class="collar" d="M86 46 Q98 58 116 56 L117 63 Q98 66 84 54 Z"/>
+<path class="t" d="M84 38 Q84 14 106 13 Q123 13 128 29 L133 32 Q139 39 132 44 Q125 49 119 50 Q114 57 103 56 Q88 55 84 38 Z"/>
+<ellipse class="o" cx="133" cy="36" rx="4.5" ry="4"/><circle class="o" cx="113" cy="28" r="2.8"/><circle class="w" cx="114" cy="27" r="0.9"/><path class="n" d="M113 43 Q119 47 124 42"/>
+<g class="oreja"><path class="t" d="M94 20 Q76 15 72 30 L79 30 L74 37 L82 36 L80 44 Q90 50 99 42 Q103 29 94 20 Z"/></g></g></svg>`;
+
+const GATO=`<svg viewBox="0 0 140 110"><g class="todo">
+<g class="piernas">${L('pb',56,12,70,101)}${L('pa',47,12,70,101)}</g>
+<g class="cuerpoG">
+<g class="colaG"><path class="n" style="stroke-width:9" d="M46 66 Q30 66 28 52 Q27 44 34 42"/><path style="stroke:#FFFDF8;stroke-width:3;fill:none;stroke-linecap:round" d="M46 66 Q30 66 28 52 Q27 44 34 42"/></g>
+<g class="otraG">${L('pd',84,12,68,99)}</g>
+<path class="t" d="M44 68 Q44 56 60 56 L82 56 Q96 56 96 68 Q96 82 82 82 L58 82 Q44 82 44 72 Z"/>
+<g class="golpeG">${L('pc',76,12,68,99)}<circle class="tip" cx="82" cy="97" r="1" fill="none"/></g>
+<path class="t" d="M84 18 L82 -4 L100 8 Z M110 8 L128 -2 L124 20 Z"/><path class="rosa" d="M87 11 L86 2 L94 8 Z M114 8 L122 4 L120 14 Z"/>
+<circle class="t" cx="104" cy="32" r="27"/>
+<circle class="o" cx="112" cy="30" r="6.5"/><circle class="w" cx="114.5" cy="27.5" r="2.2"/><circle class="w" cx="110" cy="33" r="1"/>
+<ellipse cx="114" cy="42" rx="5" ry="3" fill="#F4A6A0" opacity=".7"/>
+<path class="rosa" d="M124 37 L128 37 L126 40 Z"/><path class="n" style="stroke-width:2.6" d="M126 40 Q124 44 120 42 M126 40 Q127 44 130 43"/>
+<path class="n" style="stroke-width:2.2" d="M128 34 L142 31 M128 39 L142 41"/></g></g></svg>`;
+
+const CFG={perro:{w:120,h:94,esc:120/140,punta:[137,36]},gato:{w:120,h:94,bajar:18}};
+const z=document.getElementById('zona'),cur=document.getElementById('cur'),msg=document.getElementById('msg');
+let falso={x:innerWidth/2,y:innerHeight/2},b=null,tipo=null,lado=1,timer=null,huye=null,estado='nada',ts=[],tipOff=null;
+let proximo=Math.random()<.5?'perro':'gato';
+const T=(f,ms)=>ts.push(setTimeout(f,ms));
+function limpiar(){ts.forEach(clearTimeout);ts=[];}
+function dibCur(cls){cur.className='';if(cls){void cur.offsetWidth;cur.classList.add(cls);}cur.style.left=falso.x+'px';cur.style.top=falso.y+'px';}
+function voltear(){b.querySelector('svg').classList.toggle('mirror',lado<0);}
+function medir(){b.classList.add('sintrans','parado','golpe');const t=b.querySelector('.tip').getBoundingClientRect(),r=b.getBoundingClientRect();
+  const o={dx:t.left+t.width/2-r.left,dy:t.top+t.height/2-r.top};b.classList.remove('parado','golpe');void b.offsetWidth;b.classList.remove('sintrans');return o;}
+function pos(){
+  if(tipo==='perro'){const c=CFG.perro;const px=c.punta[0]*c.esc,py=c.punta[1]*c.esc;return [lado>0?falso.x-px:falso.x-(c.w-px),falso.y-py+4];}
+  return [falso.x-tipOff.dx+2*lado,falso.y-tipOff.dy+CFG.gato.bajar];}
+function mover(){const [x,y]=pos();b.style.left=x+'px';b.style.top=y+'px';}
+function venir(){tipo=proximo;proximo=tipo==='perro'?'gato':'perro';lado=falso.x>z.clientWidth/2?1:-1;const c=CFG[tipo];
+  b=document.createElement('div');b.className='bicho '+tipo;b.style.width=c.w+'px';b.style.height=c.h+'px';b.innerHTML=tipo==='perro'?PERRO:GATO;voltear();
+  b.style.left=(lado>0?-c.w-30:z.clientWidth+30)+'px';b.style.top='0px';z.appendChild(b);
+  if(tipo==='gato')tipOff=medir();
+  const [,y]=pos();b.style.top=y+'px';b.classList.add('camina');estado='viene';msg.textContent='';
+  requestAnimationFrame(()=>requestAnimationFrame(mover));
+  T(()=>{if(!b)return;b.classList.remove('camina');estado='juega';tipo==='perro'?jugarPerro():jugarGato();},950);}
+function bordes(){falso.x=Math.max(50,Math.min(z.clientWidth-50,falso.x));falso.y=Math.max(50,Math.min(z.clientHeight-90,falso.y));
+  const [x]=pos();if(x<-20||x>z.clientWidth-CFG[tipo].w+20){lado*=-1;voltear();if(tipo==='gato')tipOff=medir();}}
+function jugarPerro(){b.classList.add('respira');const paso=()=>{if(!b||estado!=='juega')return;
+  b.classList.remove('empuja');void b.offsetWidth;b.classList.add('empuja');
+  T(()=>{falso.x+=15*lado;falso.y-=3;dibCur();},440);
+  T(()=>{if(!b)return;b.classList.remove('empuja');bordes();b.classList.add('camina','rapido');mover();T(()=>b&&b.classList.remove('rapido','camina'),340);},800);
+  T(paso,1500+Math.random()*700);};T(paso,400);}
+function jugarGato(){const ronda=()=>{if(!b||estado!=='juega')return;
+  b.classList.add('parado');const golpes=1+Math.floor(Math.random()*2);let t=500;
+  for(let i=0;i<golpes;i++){
+    T(()=>b&&b.classList.add('alza'),t);
+    T(()=>{if(!b)return;b.classList.remove('alza');b.classList.add('golpe');},t+330);
+    T(()=>{falso.x+=(12+Math.random()*14)*lado;falso.y+=22+Math.random()*16;bordes();dibCur('cae');},t+390);
+    T(()=>b&&b.classList.remove('golpe'),t+560);
+    t+=760;}
+  T(()=>b&&b.classList.remove('parado'),t+100);
+  T(()=>{if(!b)return;b.classList.add('camina');mover();},t+550);
+  T(()=>{if(!b)return;b.classList.remove('camina');ronda();},t+1500+Math.random()*500);};T(ronda,300);}
+function irse(){if(!b)return;limpiar();const x=b;estado='nada';x.className='bicho camina '+tipo;voltear();x.style.left=(lado>0?-170:z.clientWidth+40)+'px';b=null;setTimeout(()=>x.remove(),950);msg.textContent='Dejá el mouse quieto otra vez: ahora viene el '+proximo;}
+function armar(){clearTimeout(timer);timer=setTimeout(()=>{if(!b)venir();},ESPERA_MS);}
+z.addEventListener('mousemove',e=>{const r=z.getBoundingClientRect();falso.x=e.clientX-r.left;falso.y=e.clientY-r.top;cur.style.transition='none';dibCur();void cur.offsetWidth;cur.style.transition='';
+  if(b&&estado!=='nada'&&estado!=='persigue'){estado='persigue';limpiar();b.className='bicho camina '+tipo;voltear();clearTimeout(huye);huye=setTimeout(irse,1500);}
+  if(b&&estado==='persigue')mover();
+  armar();});
+dibCur();armar();
+</script>
+</body>
+</html>

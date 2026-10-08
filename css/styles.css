@@ -1,5 +1,8 @@
 :root {
-  --fuente: "Fredoka", system-ui, sans-serif;
+  --fuente: "Fredoka", system-ui, sans-serif;            /* títulos, barra y resto de la página */
+  --fuente-productos: "Poppins", system-ui, sans-serif;  /* tarjetas de productos y pie de página */
+  --fuente-manuscrita: "Caveat", cursive;               /* título y firma de la notita de "Quiénes somos" */
+  --fuente-nota-texto: "Caveat", cursive;               /* texto del medio de la notita (misma letra que el título) */
 }
 
 * {
@@ -18,6 +21,20 @@ body {
   background: var(--color-fondo-pagina);
   color: var(--color-texto);
   line-height: 1.5;
+}
+
+/* Fondo con dibujitos (huesitos, patitas y corazones) sobre el color de fondo.
+   Los colores de los dibujos están dentro del dibujo: marrón #914c1e y naranja #d67d09.
+   Qué tanto se notan se cambia en colores.css → --fondo-dibujos-intensidad */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='90' viewBox='0 0 120 90'><g transform='translate(6 12) rotate(-20 20 8) scale(0.7)' fill='%23914c1e' fill-opacity='0.09'><circle cx='5' cy='4.5' r='4'/><circle cx='5' cy='11.5' r='4'/><circle cx='35' cy='4.5' r='4'/><circle cx='35' cy='11.5' r='4'/><rect x='5' y='4.5' width='30' height='7' rx='2'/></g><g transform='translate(70 8) rotate(15 15 15) scale(0.67)' fill='%23914c1e' fill-opacity='0.09'><ellipse cx='15' cy='20' rx='8' ry='7'/><ellipse cx='6' cy='11' rx='3.2' ry='4'/><ellipse cx='12' cy='6' rx='3.2' ry='4'/><ellipse cx='18' cy='6' rx='3.2' ry='4'/><ellipse cx='24' cy='11' rx='3.2' ry='4'/></g><g transform='translate(44 55) rotate(0 10 9) scale(0.8)' fill='%23d67d09' fill-opacity='0.18'><path d='M10 17C-6 7 3-4 10 4C17-4 26 7 10 17Z'/></g><g transform='translate(12 58) rotate(-10 15 15) scale(0.6)' fill='%23914c1e' fill-opacity='0.09'><ellipse cx='15' cy='20' rx='8' ry='7'/><ellipse cx='6' cy='11' rx='3.2' ry='4'/><ellipse cx='12' cy='6' rx='3.2' ry='4'/><ellipse cx='18' cy='6' rx='3.2' ry='4'/><ellipse cx='24' cy='11' rx='3.2' ry='4'/></g><g transform='translate(82 60) rotate(30 20 8) scale(0.65)' fill='%23914c1e' fill-opacity='0.09'><circle cx='5' cy='4.5' r='4'/><circle cx='5' cy='11.5' r='4'/><circle cx='35' cy='4.5' r='4'/><circle cx='35' cy='11.5' r='4'/><rect x='5' y='4.5' width='30' height='7' rx='2'/></g></svg>");
+  background-size: 120px 90px;
+  opacity: var(--fondo-dibujos-intensidad);
 }
 
 body.sin-scroll {
@@ -55,6 +72,57 @@ img {
   background: var(--color-barra-fondo);
 }
 
+/* ---------- Pisadas que cruzan la barra ---------- */
+
+.pisadas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pisadas span {
+  position: absolute;
+  left: calc(1% + var(--i) * 4.7%);
+  top: 8%;
+  font-size: 26px;
+  color: var(--color-pisadas);
+  opacity: 0;
+  transform: rotate(90deg);
+  /* 21 pasos: el paseo dura exactamente 21 pasos, así cuando llega al final arranca de nuevo sin pausa */
+  animation: pisada calc(var(--pisadas-paso) * 21) linear infinite;
+  animation-delay: calc(var(--i) * var(--pisadas-paso));
+}
+
+/* Pie izquierdo / pie derecho: una arriba, una abajo, como pasos de verdad */
+.pisadas span:nth-child(even) {
+  top: 48%;
+}
+
+/* Cada huellita se "estampa", dura un ratito y se borra:
+   así solo se ven las últimas 3 o 4 y parece que el perrito avanza */
+@keyframes pisada {
+  0%   { opacity: 0; scale: 1.4; }
+  2%   { opacity: 1; scale: 1; }
+  11%  { opacity: 1; }
+  18%  { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* El contenido de la barra queda por encima de las pisadas */
+.header > :not(.pisadas) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Si la persona pidió "reducir movimiento" en su compu o celu, no se muestran */
+@media (prefers-reduced-motion: reduce) {
+  .pisadas {
+    display: none;
+  }
+}
+
 .marca {
   display: flex;
   align-items: center;
@@ -66,8 +134,8 @@ img {
 .marca-logo {
   position: relative;
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: var(--color-logo-fondo);
   border: 3px solid var(--color-logo-aro);
@@ -90,10 +158,11 @@ img {
 .marca-nombre {
   color: var(--color-nombre-tienda);
   font-size: 30px;
-  font-weight: 600;
-  letter-spacing: 1px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
   line-height: 1;
   white-space: nowrap;
+  text-shadow: 1px 2px 6px var(--color-nombre-sombra);
 }
 
 .marca-nombre .ti {
@@ -117,6 +186,7 @@ img {
 }
 
 .btn-carrito {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -132,12 +202,26 @@ img {
   background: var(--color-boton-carrito-hover);
 }
 
+/* Burbujita con la cantidad, arriba a la derecha del botón */
 .contador {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 2px solid var(--color-contador-borde);
   background: var(--color-contador-fondo);
   color: var(--color-contador-texto);
-  padding: 0 8px;
-  min-width: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
   text-align: center;
+}
+
+.contador[hidden] {
+  display: none;
 }
 
 .contador.salto {
@@ -167,6 +251,53 @@ img {
   font-size: 40px;
   font-weight: 600;
   margin-bottom: 16px;
+}
+
+/* Notita de papel pegada con cinta (texto de "Quiénes somos") */
+.nota {
+  position: relative;
+  padding: 34px 36px 24px;
+  margin-bottom: 18px;
+  background: var(--color-nota-fondo);
+  border: 1.5px solid var(--color-nota-marco);
+  box-shadow: 0 10px 24px rgba(61, 29, 8, 0.10);
+  transform: rotate(-1.2deg);
+}
+
+.nota-cinta {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 120px;
+  height: 28px;
+  margin-left: -60px;
+  background: var(--color-nota-cinta);
+  opacity: 0.85;
+  transform: rotate(3deg);
+}
+
+.quienes .nota-titulo {
+  font-family: var(--fuente-manuscrita);
+  font-size: 50px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 14px;
+}
+
+.quienes .nota p {
+  font-family: var(--fuente-nota-texto);
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--color-texto);
+}
+
+.quienes .nota .nota-firma {
+  font-family: var(--fuente-manuscrita);
+  color: var(--color-titulos);
+  font-size: 28px;
+  text-align: right;
+  margin: 6px 0 0;
 }
 
 .quienes p {
@@ -330,9 +461,10 @@ img {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 16px;
   background: var(--color-buscador-fondo);
   border: 2px solid var(--color-buscador-marco);
+  border-radius: 999px;
   color: var(--color-texto-suave);
   min-width: 240px;
 }
@@ -357,6 +489,7 @@ img {
 }
 
 .tarjeta {
+  font-family: var(--fuente-productos);
   display: flex;
   flex-direction: column;
   background: var(--color-tarjeta-fondo);
@@ -400,8 +533,9 @@ img {
 }
 
 .tarjeta h3 {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 500;
+  line-height: 1.35;
   margin: 4px 0 12px;
 }
 
@@ -428,6 +562,7 @@ img {
 
 .btn-agregar:hover {
   background: var(--color-boton-agregar-hover);
+  color: var(--color-boton-agregar-hover-texto);
 }
 
 .sin-resultados {
@@ -439,15 +574,89 @@ img {
 /* ---------- Footer ---------- */
 
 .footer {
+  font-family: var(--fuente-productos);
   background: var(--color-pie-fondo);
   color: var(--color-pie-texto);
-  padding: 24px 0;
-  text-align: center;
   font-size: 15px;
 }
 
-.footer strong {
+.footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 32px;
+  padding-top: 40px;
+  padding-bottom: 32px;
+}
+
+.footer-marca {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.footer-nombre {
   color: var(--color-pie-nombre);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.footer-frase {
+  color: var(--color-pie-suave);
+  font-size: 14px;
+}
+
+.footer-columna h3 {
+  color: var(--color-pie-nombre);
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.footer-columna p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--color-pie-suave);
+}
+
+.footer-columna .ti {
+  font-size: 18px;
+  color: var(--color-pie-nombre);
+}
+
+.footer-columna a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.footer-columna a:hover {
+  color: var(--color-pie-nombre);
+  text-decoration: underline;
+}
+
+.footer-final {
+  border-top: 1px solid var(--color-pie-linea);
+  font-size: 13px;
+  color: var(--color-pie-suave);
+}
+
+.footer-final .contenedor {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.footer-final strong {
+  color: var(--color-pie-nombre);
+  letter-spacing: 1px;
 }
 
 /* ---------- Carrito ---------- */
@@ -625,6 +834,14 @@ img {
     grid-template-columns: 1fr;
     gap: 28px;
   }
+
+  .footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .footer-marca {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 600px) {
@@ -634,8 +851,8 @@ img {
   }
 
   .marca-logo {
-    width: 40px;
-    height: 40px;
+    width: 46px;
+    height: 46px;
     font-size: 22px;
   }
 
@@ -655,8 +872,12 @@ img {
     padding: 36px 0;
   }
 
-  .quienes h1 {
-    font-size: 32px;
+  .nota {
+    padding: 30px 22px 20px;
+  }
+
+  .quienes .nota-titulo {
+    font-size: 40px;
   }
 
   .buscador {
@@ -684,5 +905,16 @@ img {
   .btn-agregar {
     width: 34px;
     height: 34px;
+  }
+
+  .footer-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .footer-final .contenedor {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
 }

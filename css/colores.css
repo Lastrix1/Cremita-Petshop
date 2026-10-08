@@ -1,6 +1,6 @@
 /* =====================================================================
    COLORES DE LA PÁGINA
-   Para cambiar un color, reemplazá el código (ej: #592807) por otro.
+   Para cambiar un color, reemplazá el código (ej: #914c1e) por otro.
    Buscador de colores: https://htmlcolorcodes.com/es/
    "hover" = el color cuando pasás el mouse por encima.
    ===================================================================== */
@@ -9,70 +9,79 @@
 
   /* ---------- General ---------- */
   --color-fondo-pagina:        #FBF6EC;  /* fondo de toda la página */
+  --fondo-dibujos-intensidad:  1;        /* dibujitos del fondo: 0 = invisibles, 1 = normal, 1.5 = más marcados */
   --color-texto:               #1E1E1E;  /* texto común */
   --color-texto-suave:         #7A5C43;  /* textos secundarios (categorías, aclaraciones) */
-  --color-titulos:             #592807;  /* títulos ("Quiénes somos", "Productos") */
-  --color-linea-separadora:    #592807;  /* línea gruesa entre "Quiénes somos" y "Productos" */
+  --color-titulos:             #914c1e;  /* títulos ("Quiénes somos", "Productos") */
+  --color-linea-separadora:    #914c1e;  /* línea gruesa entre "Quiénes somos" y "Productos" */
 
   /* ---------- Barra de arriba ---------- */
-  --color-barra-fondo:         #592807;  /* fondo de la barra */
-  --color-nombre-tienda:       #F9A236;  /* "CREMITA PETSHOP" */
+  --color-barra-fondo:         #914c1e;  /* fondo de la barra */
+  --color-pisadas:             rgba(255, 243, 220, 0.28);  /* huellitas que cruzan la barra (el último número es qué tanto se notan) */
+  --pisadas-paso:              0.32s;  /* tiempo entre una huellita y la siguiente: más chico = camina más rápido */
+  --color-nombre-tienda:       #FFF3DC;  /* "CREMITA PETSHOP" */
+  --color-nombre-sombra:       rgba(42, 18, 6, 0.55);  /* sombra debajo de "CREMITA PETSHOP" (el último número es la intensidad: 0 a 1) */
   --color-logo-fondo:          #FBF6EC;  /* círculo del logo */
-  --color-logo-aro:            #F7941D;  /* borde del círculo del logo */
+  --color-logo-aro:            #FFF3DC;  /* borde del círculo del logo */
   --color-logo-hueso:          #D9A066;  /* ícono de hueso (se ve si no hay logo cargado) */
   --color-menu-links:          #FBF6EC;  /* links "Quiénes somos" y "Productos" */
-  --color-menu-links-hover:    #F7941D;
+  --color-menu-links-hover:    #FFF3DC;
   --color-boton-carrito-fondo: #D9A066;  /* botón "Carrito" */
   --color-boton-carrito-texto: #3D1D08;
-  --color-boton-carrito-hover: #F7941D;
-  --color-contador-fondo:      #592807;  /* número de productos del carrito */
-  --color-contador-texto:      #FBF6EC;
+  --color-boton-carrito-hover: #FFF3DC;
+  --color-contador-fondo:      #FFF3DC;  /* burbujita con la cantidad de productos del carrito */
+  --color-contador-texto:      #914c1e;
+  --color-contador-borde:      #914c1e;  /* borde de la burbujita (igual a la barra para que se "recorte") */
 
   /* ---------- Quiénes somos ---------- */
-  --color-boton-principal-fondo: #592807;  /* botón "Ver productos" */
+  --color-boton-principal-fondo: #914c1e;  /* botón "Ver productos" */
   --color-boton-principal-texto: #FBF6EC;
   --color-boton-principal-hover: #3D1D08;
   --color-destacados-fondo:    #FFFFFF;  /* cuadros de la derecha (Atención, Envíos, Marcas) */
   --color-destacados-marco:    #EADBC8;  /* marco de esos cuadros */
-  --color-destacados-detalle:  #F7941D;  /* franja gruesa a la izquierda de cada cuadro */
-  --color-destacados-iconos:   #592807;
+  --color-destacados-detalle:  #d67d09;  /* franja gruesa a la izquierda de cada cuadro */
+  --color-destacados-iconos:   #914c1e;
+  --color-nota-fondo:          #FFFFFF;  /* papelito de "Quiénes somos" */
+  --color-nota-marco:          #EADBC8;  /* borde finito del papelito */
+  --color-nota-cinta:          #E8C79A;  /* cinta que lo "pega" arriba */
 
   /* ---------- Filtros y buscador ---------- */
   --color-filtro-fondo:        #E8DFCF;  /* botones Todos, Perros, Juguetes… */
-  --color-filtro-texto:        #592807;
+  --color-filtro-texto:        #914c1e;
   --color-filtro-hover:        #D9A066;
-  --color-filtro-activo-fondo: #592807;  /* botón del filtro seleccionado */
+  --color-filtro-activo-fondo: #914c1e;  /* botón del filtro seleccionado */
   --color-filtro-activo-texto: #FBF6EC;
   --color-filtro-separador:    #EADBC8;  /* rayita entre Gatos y Juguetes */
   --color-submenu-fondo:       #FFFFFF;  /* lista desplegable de Perros / Gatos */
-  --color-submenu-detalle:     #F7941D;  /* línea arriba de la lista desplegable */
+  --color-submenu-detalle:     #914c1e;  /* línea arriba de la lista desplegable */
   --color-submenu-hover:       #E8DFCF;
   --color-buscador-fondo:      #FFFFFF;
   --color-buscador-marco:      #EADBC8;
-  --color-buscador-marco-activo: #592807;  /* marco mientras se escribe */
+  --color-buscador-marco-activo: #914c1e;  /* marco mientras se escribe */
 
   /* ---------- Tarjetas de productos ---------- */
   --color-tarjeta-fondo:       #FFFFFF;
   --color-tarjeta-marco:       #EADBC8;
   --color-tarjeta-marco-hover: #D9A066;
   --color-tarjeta-imagen-fondo: #E8DFCF;  /* fondo detrás de la foto o el ícono */
-  --color-tarjeta-icono:       #592807;  /* ícono cuando el producto no tiene foto */
-  --color-precio:              #592807;
-  --color-boton-agregar-fondo: #592807;  /* botón "+" */
+  --color-tarjeta-icono:       #914c1e;  /* ícono cuando el producto no tiene foto */
+  --color-precio:              #914c1e;
+  --color-boton-agregar-fondo: #914c1e;  /* botón "+" */
   --color-boton-agregar-texto: #FBF6EC;
-  --color-boton-agregar-hover: #F7941D;
+  --color-boton-agregar-hover: #FFF3DC;
+  --color-boton-agregar-hover-texto: #914c1e;  /* el "+" al pasar el mouse */
 
   /* ---------- Carrito (panel lateral) ---------- */
   --color-carrito-fondo:       #FBF6EC;
-  --color-carrito-marco:       #592807;  /* borde del panel y línea punteada sobre el total */
-  --color-carrito-cabecera-fondo: #592807;  /* franja de arriba con "Tu pedido" */
-  --color-carrito-titulo:      #F7941D;  /* texto "Tu pedido" */
+  --color-carrito-marco:       #914c1e;  /* borde del panel y línea punteada sobre el total */
+  --color-carrito-cabecera-fondo: #914c1e;  /* franja de arriba con "Tu pedido" */
+  --color-carrito-titulo:      #FFF3DC;  /* texto "Tu pedido" */
   --color-carrito-cerrar:      #FBF6EC;  /* la X para cerrar */
   --color-carrito-lineas:      #EADBC8;  /* líneas entre productos */
   --color-cantidad-fondo:      #D9A066;  /* botones + y − */
   --color-cantidad-texto:      #3D1D08;
-  --color-cantidad-hover:      #F7941D;
-  --color-total:               #592807;  /* "Total: $..." */
+  --color-cantidad-hover:      #FFF3DC;
+  --color-total:               #914c1e;  /* "Total: $..." */
   --color-whatsapp-fondo:      #25D366;  /* botón "Pedir por WhatsApp" */
   --color-whatsapp-texto:      #FFFFFF;
   --color-whatsapp-hover:      #1EB257;
@@ -80,7 +89,9 @@
   --color-oscurecer-fondo:     rgba(30, 15, 5, 0.5);  /* sombra sobre la página con el carrito abierto */
 
   /* ---------- Pie de página ---------- */
-  --color-pie-fondo:           #592807;
+  --color-pie-fondo:           #914c1e;
   --color-pie-texto:           #FBF6EC;
-  --color-pie-nombre:          #F7941D;  /* "Cremita Petshop" en el pie */
+  --color-pie-nombre:          #FFF3DC;  /* "Cremita Petshop" en el pie */
+  --color-pie-suave:           rgba(255, 243, 220, 0.75);  /* textos secundarios del pie (dirección, horarios…) */
+  --color-pie-linea:           rgba(255, 243, 220, 0.2);   /* línea fina sobre "Página creada por KRS" */
 }

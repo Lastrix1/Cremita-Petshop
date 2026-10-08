@@ -6,12 +6,12 @@ Catálogo web de Cremita Petshop. Los clientes eligen productos y envían el ped
 
 | Qué | Dónde |
 |---|---|
-| Número de WhatsApp | `js/config.js` → `whatsapp` |
+| Número de WhatsApp | `js/config.js` → `WHATSAPP` (también arma el teléfono y el link del pie) |
 | Productos y categorías | `js/productos.js` |
 | Fotos de productos | `img/productos/` y el campo `imagen` de cada producto |
 | Logo | `img/logo.png` |
 | Texto de "Quiénes somos" | `index.html`, sección `quienes-somos` |
-| Datos de contacto | `index.html`, `<footer>` |
+| Datos de contacto y links (dirección, horarios, teléfono, mapa, Instagram, Facebook) | `js/config.js` |
 | Colores | `css/colores.css` (cada color tiene un nombre y una nota de dónde se usa) |
 
 Todo lo que falta completar está marcado con `[corchetes]` o con un comentario `PLACEHOLDER`.

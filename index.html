@@ -5,21 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cremita Petshop</title>
   <meta name="description" content="Cremita Petshop: alimentos, accesorios y juguetes para tu mascota. Hacé tu pedido por WhatsApp.">
-  <link rel="icon" href="img/logo.png">
+  <link rel="icon" href="img/logos/logoSinTexto.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Poppins:wght@400;500;600&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
   <link rel="stylesheet" href="css/colores.css">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/mascotas.css">
 </head>
 <body>
 
   <!-- Barra superior -->
   <header class="header">
+    <!-- Pisadas animadas que cruzan la barra (solo decoración) -->
+    <div class="pisadas" aria-hidden="true">
+      <span style="--i:0"><i class="ti ti-paw"></i></span>
+      <span style="--i:1"><i class="ti ti-paw"></i></span>
+      <span style="--i:2"><i class="ti ti-paw"></i></span>
+      <span style="--i:3"><i class="ti ti-paw"></i></span>
+      <span style="--i:4"><i class="ti ti-paw"></i></span>
+      <span style="--i:5"><i class="ti ti-paw"></i></span>
+      <span style="--i:6"><i class="ti ti-paw"></i></span>
+      <span style="--i:7"><i class="ti ti-paw"></i></span>
+      <span style="--i:8"><i class="ti ti-paw"></i></span>
+      <span style="--i:9"><i class="ti ti-paw"></i></span>
+      <span style="--i:10"><i class="ti ti-paw"></i></span>
+      <span style="--i:11"><i class="ti ti-paw"></i></span>
+      <span style="--i:12"><i class="ti ti-paw"></i></span>
+      <span style="--i:13"><i class="ti ti-paw"></i></span>
+      <span style="--i:14"><i class="ti ti-paw"></i></span>
+      <span style="--i:15"><i class="ti ti-paw"></i></span>
+      <span style="--i:16"><i class="ti ti-paw"></i></span>
+      <span style="--i:17"><i class="ti ti-paw"></i></span>
+      <span style="--i:18"><i class="ti ti-paw"></i></span>
+      <span style="--i:19"><i class="ti ti-paw"></i></span>
+      <span style="--i:20"><i class="ti ti-paw"></i></span>
+    </div>
     <a href="#inicio" class="marca">
       <span class="marca-logo">
-        <img src="img/logo.png" alt="Logo Cremita Petshop" onerror="this.remove()">
+        <img src="img/logos/logoSinTexto.jpg" alt="Logo Cremita Petshop" onerror="this.remove()">
         <i class="ti ti-bone" aria-hidden="true"></i>
       </span>
       <span class="marca-nombre">CREMITA PETSHOP <i class="ti ti-paw" aria-hidden="true"></i></span>
@@ -41,15 +66,19 @@
     <section class="quienes" id="quienes-somos">
       <div class="contenedor quienes-grid">
         <div class="quienes-texto">
-          <h1>Quiénes somos</h1>
-          <!-- PLACEHOLDER: reemplazar con la historia real de Cremita -->
-          <p>
-            [Texto de presentación] Somos una petshop familiar dedicada al bienestar de tus mascotas.
-            Contá acá cómo nació Cremita, desde cuándo están y qué los hace distintos.
-          </p>
-          <p>
-            [Segundo párrafo opcional] Dirección, horarios o cualquier dato que quieran destacar.
-          </p>
+          <article class="nota">
+            <span class="nota-cinta" aria-hidden="true"></span>
+            <h1 class="nota-titulo">Quiénes somos</h1>
+            <!-- PLACEHOLDER: reemplazar con la historia real de Cremita -->
+            <p>
+              [Texto de presentación] Somos una petshop familiar dedicada al bienestar de tus mascotas.
+              Contá acá cómo nació Cremita, desde cuándo están y qué los hace distintos.
+            </p>
+            <p>
+              [Segundo párrafo opcional] Dirección, horarios o cualquier dato que quieran destacar.
+            </p>
+            <p class="nota-firma"><i class="ti ti-paw" aria-hidden="true"></i> Cremita</p>
+          </article>
           <a href="#productos" class="btn-primario">Ver productos <i class="ti ti-arrow-down" aria-hidden="true"></i></a>
         </div>
         <ul class="quienes-destacados">
@@ -80,10 +109,34 @@
   </main>
 
   <footer class="footer">
-    <div class="contenedor">
-      <!-- PLACEHOLDER: datos de contacto reales -->
-      <p><strong>Cremita Petshop</strong> · [Dirección] · [Horarios]</p>
-      <p>[Instagram] · [Teléfono]</p>
+    <div class="contenedor footer-grid">
+      <!-- Los textos y links de esta parte se completan solos desde js/config.js -->
+      <div class="footer-marca">
+        <div>
+          <p class="footer-nombre">Cremita Petshop</p>
+          <p class="footer-frase" data-dato="frase"></p>
+        </div>
+      </div>
+
+      <div class="footer-columna">
+        <h3>Visitanos</h3>
+        <p><a data-link="mapa" target="_blank" rel="noopener"><i class="ti ti-map-pin" aria-hidden="true"></i> <span data-dato="direccion"></span></a></p>
+        <p><i class="ti ti-clock" aria-hidden="true"></i> <span data-dato="horarios"></span></p>
+      </div>
+
+      <div class="footer-columna">
+        <h3>Contacto</h3>
+        <p><a data-link="whatsappLink" target="_blank" rel="noopener"><i class="ti ti-brand-whatsapp" aria-hidden="true"></i> <span data-dato="telefono"></span></a></p>
+        <p><a data-red="instagram" target="_blank" rel="noopener"><i class="ti ti-brand-instagram" aria-hidden="true"></i> <span></span></a></p>
+        <p><a data-red="facebook" target="_blank" rel="noopener"><i class="ti ti-brand-facebook" aria-hidden="true"></i> <span></span></a></p>
+      </div>
+    </div>
+
+    <div class="footer-final">
+      <div class="contenedor">
+        <span>© 2026 Cremita Petshop</span>
+        <span>Página creada por <strong>KRS</strong></span>
+      </div>
     </div>
   </footer>
 
@@ -108,5 +161,6 @@
   <script src="js/config.js"></script>
   <script src="js/productos.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/mascotas.js"></script>
 </body>
 </html>

@@ -1,0 +1,66 @@
+/* =====================================================================
+   MASCOTAS DEL CURSOR
+   Si el mouse queda quieto un rato, viene un perro o un gato a jugar con él.
+   El tiempo de espera se cambia en js/mascotas.js → ESPERA_MS
+   ===================================================================== */
+
+/* Capa transparente por encima de la página (no bloquea clics) */
+#mascotas{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:15}
+/* Mientras juega la mascota se esconde el cursor real y se ve uno dibujado */
+html.mascota-activa,html.mascota-activa *{cursor:none!important}
+#cur{display:none}
+html.mascota-activa #cur{display:block}
+#mascotas #cur{position:absolute;width:18px;height:24px;pointer-events:none;z-index:5;transition:left .2s ease-out,top .2s ease-out}
+#mascotas #cur.cae{transition:left .4s ease-out,top .4s cubic-bezier(.3,1.5,.6,1)}
+#mascotas .bicho{position:absolute;pointer-events:none;transition:left .9s linear,top .9s linear}
+#mascotas .bicho.rapido{transition:left .3s ease-out,top .3s ease-out}
+#mascotas .bicho svg{width:100%;height:100%;overflow:visible}
+#mascotas .bicho .t{stroke:#3a2416;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;fill:#FFFDF8}
+#mascotas .bicho .n{stroke:#3a2416;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;fill:none}
+#mascotas .bicho .o{fill:#3a2416}
+#mascotas .bicho .w{fill:#fff}
+#mascotas .bicho .collar{stroke:#3a2416;stroke-width:3.2;stroke-linejoin:round;fill:#d67d09}
+#mascotas .bicho .rosa{fill:#F4A6A0;stroke:#3a2416;stroke-width:2}
+#mascotas .sintrans,#mascotas .sintrans *{transition:none!important;animation:none!important}
+#mascotas .todo,#mascotas .pata,#mascotas .cuerpoG,#mascotas .golpeG,#mascotas .otraG,#mascotas .piernas,#mascotas .colaG,#mascotas .colaP,#mascotas .oreja{transform-box:view-box}
+#mascotas .todo{transform-origin:66px 100px}
+#mascotas .mirror{transform:scaleX(-1)}
+
+/* ---- caminar (perro y gato) ---- */
+#mascotas .camina .pa,#mascotas .camina .pd{animation:paso .32s ease-in-out infinite}
+#mascotas .camina .pb,#mascotas .camina .pc{animation:paso .32s ease-in-out infinite reverse}
+@keyframes paso{0%,100%{transform:rotate(-20deg)}50%{transform:rotate(20deg)}}
+#mascotas .camina .todo{animation:bob .32s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-3px)}}
+
+/* ---- PERRO ---- */
+#mascotas .perro.respira .todo{animation:respira 1.6s ease-in-out infinite}
+@keyframes respira{50%{transform:scaleY(1.02)}}
+#mascotas .perro.empuja .todo{animation:cabezazo .8s cubic-bezier(.45,0,.3,1)}
+#mascotas .perro.empuja .pd{animation:pasoEmp .8s ease-in-out}
+#mascotas .perro.empuja .pc{animation:pasoEmp .8s ease-in-out .1s}
+#mascotas .perro.empuja .pa,#mascotas .perro.empuja .pb{animation:empujaAtras .8s ease-in-out}
+@keyframes cabezazo{0%{transform:none}30%{transform:translate(-5px,2px) rotate(4deg)}55%{transform:translate(10px,-2px) rotate(-4deg)}80%{transform:translate(3px,0)}100%{transform:none}}
+@keyframes pasoEmp{0%,100%{transform:none}45%{transform:rotate(-28deg)}}
+@keyframes empujaAtras{0%,100%{transform:none}50%{transform:rotate(22deg)}}
+#mascotas .colaP{transform-origin:36px 54px;animation:cola .26s ease-in-out infinite}
+@keyframes cola{50%{transform:rotate(18deg)}}
+#mascotas .oreja{transform-origin:96px 30px;animation:oreja 1.3s ease-in-out infinite}
+@keyframes oreja{50%{transform:rotate(-5deg)}}
+
+/* ---- GATO ---- */
+#mascotas .gato .piernas{transform-origin:58px 101px;transition:transform .4s ease-in-out}
+#mascotas .gato.parado .piernas{transform:scaleY(.62) skewX(-14deg)}
+#mascotas .gato .cuerpoG{transform-origin:58px 80px;transition:transform .4s ease-in-out}
+#mascotas .gato.parado .cuerpoG{transform:translateY(10px) rotate(-46deg)}
+#mascotas .gato.parado.golpe .cuerpoG{transform:translateY(10px) rotate(-38deg)}
+#mascotas .gato .golpeG{transform-origin:82px 72px;transition:transform .3s ease-out}
+#mascotas .gato.parado .golpeG{transform:rotate(-95deg)}
+#mascotas .gato.parado.alza .golpeG{transform:rotate(-150deg);transition:transform .28s ease-out}
+#mascotas .gato.parado.golpe .golpeG{transform:rotate(-88deg);transition:transform .09s ease-in}
+#mascotas .gato .otraG{transform-origin:90px 72px;transition:transform .4s ease-in-out}
+#mascotas .gato.parado .otraG{transform:rotate(-70deg)}
+#mascotas .colaG{transform-origin:46px 66px;animation:colag 1.5s ease-in-out infinite}
+@keyframes colag{50%{transform:rotate(-10deg)}}
+#mascotas .gato.parado .colaG{animation:colaf .24s ease-in-out infinite}
+@keyframes colaf{50%{transform:rotate(14deg)}}
