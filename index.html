@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cremita Petshop</title>
+  <meta name="description" content="Cremita Petshop: alimentos, accesorios y juguetes para tu mascota. Hacé tu pedido por WhatsApp.">
+  <link rel="icon" href="img/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="css/colores.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Barra superior -->
+  <header class="header">
+    <a href="#inicio" class="marca">
+      <span class="marca-logo">
+        <img src="img/logo.png" alt="Logo Cremita Petshop" onerror="this.remove()">
+        <i class="ti ti-bone" aria-hidden="true"></i>
+      </span>
+      <span class="marca-nombre">CREMITA PETSHOP <i class="ti ti-paw" aria-hidden="true"></i></span>
+    </a>
+    <nav class="nav">
+      <a href="#quienes-somos">Quiénes somos</a>
+      <a href="#productos">Productos</a>
+    </nav>
+    <button class="btn-carrito" id="abrir-carrito" aria-label="Abrir carrito">
+      <i class="ti ti-shopping-cart" aria-hidden="true"></i>
+      <span class="btn-carrito-texto">Carrito</span>
+      <span class="contador" id="contador">0</span>
+    </button>
+  </header>
+
+  <main id="inicio">
+
+    <!-- Quiénes somos -->
+    <section class="quienes" id="quienes-somos">
+      <div class="contenedor quienes-grid">
+        <div class="quienes-texto">
+          <h1>Quiénes somos</h1>
+          <!-- PLACEHOLDER: reemplazar con la historia real de Cremita -->
+          <p>
+            [Texto de presentación] Somos una petshop familiar dedicada al bienestar de tus mascotas.
+            Contá acá cómo nació Cremita, desde cuándo están y qué los hace distintos.
+          </p>
+          <p>
+            [Segundo párrafo opcional] Dirección, horarios o cualquier dato que quieran destacar.
+          </p>
+          <a href="#productos" class="btn-primario">Ver productos <i class="ti ti-arrow-down" aria-hidden="true"></i></a>
+        </div>
+        <ul class="quienes-destacados">
+          <!-- PLACEHOLDER: ajustar a lo que ofrezca la petshop -->
+          <li><i class="ti ti-heart" aria-hidden="true"></i><div><strong>Atención personalizada</strong><span>[Descripción breve]</span></div></li>
+          <li><i class="ti ti-truck-delivery" aria-hidden="true"></i><div><strong>Envíos a domicilio</strong><span>[Zonas y condiciones]</span></div></li>
+          <li><i class="ti ti-award" aria-hidden="true"></i><div><strong>Las mejores marcas</strong><span>[Marcas que trabajan]</span></div></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Catálogo -->
+    <section class="productos" id="productos">
+      <div class="contenedor">
+        <h2>Productos</h2>
+        <div class="filtros-barra">
+          <div class="filtros" id="filtros"></div>
+          <label class="buscador">
+            <i class="ti ti-search" aria-hidden="true"></i>
+            <input type="search" id="buscador" placeholder="Buscar producto" aria-label="Buscar producto">
+          </label>
+        </div>
+        <div class="grilla" id="grilla"></div>
+        <p class="sin-resultados" id="sin-resultados" hidden>No encontramos productos con ese filtro.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="contenedor">
+      <!-- PLACEHOLDER: datos de contacto reales -->
+      <p><strong>Cremita Petshop</strong> · [Dirección] · [Horarios]</p>
+      <p>[Instagram] · [Teléfono]</p>
+    </div>
+  </footer>
+
+  <!-- Carrito (panel lateral) -->
+  <div class="overlay" id="overlay" hidden></div>
+  <aside class="carrito" id="carrito" aria-label="Carrito" aria-hidden="true">
+    <div class="carrito-cabecera">
+      <h2><i class="ti ti-paw" aria-hidden="true"></i> Tu pedido</h2>
+      <button class="btn-icono" id="cerrar-carrito" aria-label="Cerrar carrito"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </div>
+    <div class="carrito-items" id="carrito-items"></div>
+    <div class="carrito-pie">
+      <div class="carrito-total">Total: <span id="total">$0</span></div>
+      <button class="btn-whatsapp" id="enviar-whatsapp">
+        <i class="ti ti-brand-whatsapp" aria-hidden="true"></i> Pedir por WhatsApp
+      </button>
+      <p class="carrito-aviso" id="carrito-aviso" hidden></p>
+      <button class="btn-vaciar" id="vaciar-carrito">Vaciar carrito</button>
+    </div>
+  </aside>
+
+  <script src="js/config.js"></script>
+  <script src="js/productos.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
