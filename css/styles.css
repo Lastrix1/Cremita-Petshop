@@ -943,11 +943,20 @@ img {
   font-size: 12px; font-weight: 600;
 }
 .cartel-stock.ultimas { background: #d67d09; color: #fff; }
-.tarjeta.sin-stock .tarjeta-imagen > i,
-.tarjeta.sin-stock .tarjeta-imagen > img { opacity: .35; }
-.tarjeta.sin-stock .precio { opacity: .5; }
+/* Sin stock, o el cliente ya tiene todo el stock en el carrito: toda la tarjeta apagada
+   (el cartelito queda bien visible) */
+.tarjeta.sin-stock .tarjeta-imagen > i, .tarjeta.sin-stock .tarjeta-imagen > img,
+.tarjeta.al-tope .tarjeta-imagen > i, .tarjeta.al-tope .tarjeta-imagen > img { opacity: .35; }
+.tarjeta.sin-stock :is(.tarjeta-categoria, h3, .precio),
+.tarjeta.al-tope :is(.tarjeta-categoria, h3, .precio) { opacity: .45; }
 .btn-agregar:disabled,
 .item-cantidad button:disabled { opacity: .35; cursor: not-allowed; }
+/* El "+" desactivado es siempre el cuadradito marrón clarito (también al pasar el mouse o tocarlo en el celu) */
+.btn-agregar:disabled,
+.btn-agregar:disabled:hover {
+  background: var(--color-boton-agregar-fondo);
+  color: var(--color-boton-agregar-texto);
+}
 .cargando { grid-column: 1 / -1; text-align: center; color: var(--color-texto-suave); padding: 32px 0; }
 
 /* Mensaje en el carrito después de mandar el pedido */

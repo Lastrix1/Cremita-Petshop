@@ -118,13 +118,17 @@ function renderGrilla() {
         ? `<img src="${escapar(p.imagen)}" alt="${escapar(p.nombre)}" loading="lazy">`
         : `<i class="ti ${escapar(p.icono || "ti-paw")}" aria-hidden="true"></i>`;
       const sinStock = !hayStock(p);
+      // El cliente ya tiene en el carrito todo el stock que hay de este producto
+      const alTope = !sinStock && p.stock != null && (carrito[p.id] || 0) >= maximoPermitido(p);
       const cartel = sinStock
         ? `<span class="cartel-stock">Sin stock</span>`
+        : alTope
+        ? `<span class="cartel-stock">No quedan más</span>`
         : p.stock != null && p.stock <= 3
           ? `<span class="cartel-stock ultimas">¡Últimas unidades!</span>`
           : "";
       return `
-        <article class="tarjeta${sinStock ? " sin-stock" : ""}">
+        <article class="tarjeta${sinStock ? " sin-stock" : alTope ? " al-tope" : ""}">
           <div class="tarjeta-imagen">${imagen}${cartel}</div>
           <div class="tarjeta-cuerpo">
             <span class="tarjeta-categoria">${escapar(p.categoria)} · ${escapar(p.subcategoria)}</span>
