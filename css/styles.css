@@ -84,14 +84,14 @@ img {
 
 .pisadas span {
   position: absolute;
-  left: calc(1% + var(--i) * 4.7%);
+  left: calc(1% + var(--i) * 3.9%); /* separación entre huellitas (antes 4.7%) */
   top: 8%;
   font-size: 26px;
   color: var(--color-pisadas);
   opacity: 0;
   transform: rotate(90deg);
-  /* 21 pasos: el paseo dura exactamente 21 pasos, así cuando llega al final arranca de nuevo sin pausa */
-  animation: pisada calc(var(--pisadas-paso) * 21) linear infinite;
+  /* 25 pasos: el paseo dura exactamente 25 pasos, así cuando llega al final arranca de nuevo sin pausa */
+  animation: pisada calc(var(--pisadas-paso) * 25) linear infinite;
   animation-delay: calc(var(--i) * var(--pisadas-paso));
 }
 
@@ -101,12 +101,12 @@ img {
 }
 
 /* Cada huellita se "estampa", queda un rato y se va borrando de a poco:
-   se ven unas 8 o 9 detrás del perrito, las más viejas cada vez más suaves */
+   se ven unas 5 o 6 detrás del perrito, las más viejas cada vez más suaves */
 @keyframes pisada {
   0%   { opacity: 0; scale: 1.4; }
   2%   { opacity: 1; scale: 1; }
-  24%  { opacity: 1; }
-  44%  { opacity: 0; }
+  13%  { opacity: 1; }
+  24%  { opacity: 0; }
   100% { opacity: 0; }
 }
 
@@ -658,6 +658,19 @@ img {
   color: var(--color-pie-nombre);
   letter-spacing: 1px;
 }
+
+/* "Página creada por" + logo de KRSp */
+.creado-por {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.creado-por img {
+  display: block;
+  height: 14px; /* logo en crema, del mismo color que el texto del pie */
+  width: auto;
+}
+.creado-por a[href]:hover img { opacity: .8; } /* solo si ya tiene link */
 
 /* ---------- Carrito ---------- */
 

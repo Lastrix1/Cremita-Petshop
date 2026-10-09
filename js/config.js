@@ -28,6 +28,9 @@ const FRASE = "[Frase corta] Todo para tu mascota, con cariño."; // PLACEHOLDER
 
 const SALUDO_WHATSAPP = "¡Hola Cremita! Quiero hacer este pedido:";
 
+// Página de KRSp (los que hicimos la web). Mientras esté vacío, el logo del pie no lleva a ningún lado.
+const SITIO_KRSP = ""; // ej. "https://krsp.com.ar"
+
 // ---------- A PARTIR DE ACÁ NO HACE FALTA TOCAR NADA ----------
 
 // "5491165672883" → "11 6567-2883"
@@ -55,6 +58,7 @@ const CONFIG = {
   // Links
   mapa: MAPS_ID ? `https://maps.google.com/?cid=${MAPS_ID}` : "",
   whatsappLink: WHATSAPP ? `https://wa.me/${WHATSAPP}` : "",
+  krsp: SITIO_KRSP,
   instagram: {
     url: INSTAGRAM_USUARIO ? `https://www.instagram.com/${INSTAGRAM_USUARIO}/` : "",
     texto: `@${INSTAGRAM_USUARIO}`,
