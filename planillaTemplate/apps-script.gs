@@ -127,6 +127,8 @@ function doPost(e) {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Cremita')
+    .addItem('Agregar foto al producto', 'agregarFoto')
+    .addSeparator()
     .addItem('Preparar planilla (columnas nuevas)', 'prepararPlanilla')
     .addItem('Revisar pedidos y stock', 'revisarAhora')
     .addItem('Actualizar ganancias (Resumen)', 'actualizarGanancias')
@@ -903,4 +905,133 @@ function pesos_(n) {
 
 function responder_(objeto) {
   return ContentService.createTextOutput(JSON.stringify(objeto)).setMimeType(ContentService.MimeType.JSON);
+}
+
+
+// ---------- Fotos de productos ----------
+// Cremita → "Agregar foto al producto": se para en la fila del producto (hoja Productos),
+// elige o pega una foto, y el script la achica, la guarda en Drive (carpeta "Cremita - Fotos de productos",
+// compartida para que la página la pueda mostrar) y pone el link en la columna "foto".
+
+const CARPETA_FOTOS = 'Cremita - Fotos de productos';
+
+function agregarFoto() {
+  const ui = SpreadsheetApp.getUi();
+  const hoja = SpreadsheetApp.getActiveSheet();
+  if (hoja.getName() !== HOJA_PRODUCTOS) {
+    ui.alert('Andá a la hoja "Productos", hacé clic en el producto y volvé a tocar "Agregar foto al producto".');
+    return;
+  }
+  const fila = hoja.getActiveRange().getRow();
+  const c = columnas_(hoja);
+  if (!c.foto) { ui.alert('No encuentro la columna "foto" en la hoja Productos.'); return; }
+  const nombre = fila > 1 && c.nombre ? String(hoja.getRange(fila, c.nombre).getValue() || '').trim() : '';
+  if (!nombre) { ui.alert('Hacé clic en la fila de un producto (no en los títulos ni en una fila vacía).'); return; }
+  const id = c.id ? String(hoja.getRange(fila, c.id).getValue() || '') : '';
+  const fotoActual = String(hoja.getRange(fila, c.foto).getValue() || '');
+  const html = HtmlService.createHtmlOutput(htmlFoto_({ id, fila, nombre, fotoActual }))
+    .setWidth(440).setHeight(520);
+  ui.showModalDialog(html, 'Foto del producto');
+}
+
+// La llama la ventanita con la foto ya achicada (JPG en base64)
+function subirFoto(datos) {
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJA_PRODUCTOS);
+  const c = columnas_(hoja);
+  // Busca el producto por id (por si mientras tanto se ordenó la hoja)
+  let fila = Number(datos.fila);
+  if (c.id && datos.id && hoja.getLastRow() > 1) {
+    const ids = hoja.getRange(2, c.id, hoja.getLastRow() - 1, 1).getValues();
+    const i = ids.findIndex(r => String(r[0]) === String(datos.id));
+    if (i < 0) throw new Error('No encontré el producto ' + datos.id + ' en la hoja.');
+    fila = i + 2;
+  }
+  const nombreArchivo = 'producto-' + (datos.id || fila) + '-' + Utilities.formatDate(new Date(), 'GMT-3', 'yyyyMMdd-HHmmss') + '.jpg';
+  const blob = Utilities.newBlob(Utilities.base64Decode(datos.base64), 'image/jpeg', nombreArchivo);
+  const archivo = carpetaFotos_().createFile(blob);
+  archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  const url = 'https://lh3.googleusercontent.com/d/' + archivo.getId();
+  hoja.getRange(fila, c.foto).setValue(url);
+  return url;
+}
+
+function carpetaFotos_() {
+  const props = PropertiesService.getDocumentProperties();
+  const guardada = props.getProperty('carpetaFotos');
+  if (guardada) {
+    try { const f = DriveApp.getFolderById(guardada); if (!f.isTrashed()) return f; } catch (err) {}
+  }
+  const existentes = DriveApp.getFoldersByName(CARPETA_FOTOS);
+  const carpeta = existentes.hasNext() ? existentes.next() : DriveApp.createFolder(CARPETA_FOTOS);
+  props.setProperty('carpetaFotos', carpeta.getId());
+  return carpeta;
+}
+
+function htmlFoto_(info) {
+  const esc = t => String(t).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+  return `<!doctype html><html><head><base target="_top"><style>
+  body{font-family:Arial,sans-serif;margin:0;padding:4px 2px;color:#222;font-size:14px}
+  .nombre{font-weight:bold;margin:0 0 10px}
+  .zona{border:2px dashed #904d23;padding:16px;text-align:center;cursor:pointer;background:#fbf7f2}
+  .zona.encima{background:#f1e3cf}
+  .zona small{display:block;color:#666;margin-top:6px}
+  #vista{display:block;max-width:100%;max-height:230px;margin:10px auto;object-fit:contain}
+  .botones{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+  button{font-size:14px;padding:8px 14px;border:0;cursor:pointer}
+  #subir{background:#904d23;color:#fff}#subir:disabled{background:#c8a68f;cursor:default}
+  #cancelar{background:#e6e6e6}
+  #msj{min-height:20px;margin-top:8px}.error{color:#b00020;font-weight:bold}
+  </style></head><body>
+  <p class="nombre">${esc(info.nombre)}</p>
+  <div class="zona" id="zona">Hacé clic para elegir una foto<small>o arrastrala acá, o pegala con Ctrl+V</small></div>
+  <input type="file" id="archivo" accept="image/*" hidden>
+  <img id="vista" alt="" ${info.fotoActual ? `src="${esc(info.fotoActual)}"` : 'hidden'}>
+  <div id="msj">${info.fotoActual ? 'Esta es la foto que tiene ahora. Elegí otra para reemplazarla.' : ''}</div>
+  <div class="botones"><button id="cancelar">Cancelar</button><button id="subir" disabled>Guardar foto</button></div>
+  <script>
+  const info = ${JSON.stringify({ id: info.id, fila: info.fila })};
+  const $ = id => document.getElementById(id);
+  let base64 = null;
+  const msj = (t, error) => { $('msj').textContent = t; $('msj').className = error ? 'error' : ''; };
+  function cargar(archivo) {
+    if (!archivo || !/^image\\//.test(archivo.type)) { msj('Eso no es una imagen.', true); return; }
+    const lector = new FileReader();
+    lector.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 900, k = Math.min(1, max / Math.max(img.width, img.height));
+        const lienzo = document.createElement('canvas');
+        lienzo.width = Math.round(img.width * k); lienzo.height = Math.round(img.height * k);
+        const ctx = lienzo.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, lienzo.width, lienzo.height); // fondo blanco para PNG transparentes
+        ctx.drawImage(img, 0, 0, lienzo.width, lienzo.height);
+        const url = lienzo.toDataURL('image/jpeg', 0.82);
+        base64 = url.split(',')[1];
+        $('vista').src = url; $('vista').hidden = false;
+        $('subir').disabled = false;
+        msj('Lista para guardar (' + Math.round(base64.length * 0.75 / 1024) + ' KB).');
+      };
+      img.onerror = () => msj('No pude abrir esa imagen. Probá con otra (JPG o PNG).', true);
+      img.src = lector.result;
+    };
+    lector.readAsDataURL(archivo);
+  }
+  $('zona').onclick = () => $('archivo').click();
+  $('archivo').onchange = e => cargar(e.target.files[0]);
+  $('zona').ondragover = e => { e.preventDefault(); $('zona').classList.add('encima'); };
+  $('zona').ondragleave = () => $('zona').classList.remove('encima');
+  $('zona').ondrop = e => { e.preventDefault(); $('zona').classList.remove('encima'); cargar(e.dataTransfer.files[0]); };
+  document.addEventListener('paste', e => {
+    const item = [...(e.clipboardData || {}).items || []].find(i => i.type.startsWith('image/'));
+    if (item) cargar(item.getAsFile()); else msj('Lo que pegaste no es una imagen. Copiá la imagen (clic derecho → Copiar imagen).', true);
+  });
+  $('cancelar').onclick = () => google.script.host.close();
+  $('subir').onclick = () => {
+    $('subir').disabled = true; $('cancelar').disabled = true; msj('Guardando…');
+    google.script.run
+      .withSuccessHandler(() => { msj('¡Listo! La foto ya está en la página.'); setTimeout(() => google.script.host.close(), 900); })
+      .withFailureHandler(err => { msj('No se pudo guardar: ' + (err && err.message || err), true); $('subir').disabled = false; $('cancelar').disabled = false; })
+      .subirFoto({ id: info.id, fila: info.fila, base64 });
+  };
+  </script></body></html>`;
 }

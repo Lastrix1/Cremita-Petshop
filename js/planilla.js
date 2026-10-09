@@ -41,6 +41,13 @@ function aNumero(v) {
 // Mascota "Mixto" (o "Ambos", "Perros y gatos"): el producto sirve para las dos
 const esMixto = (m) => /^(mixto|ambos|perros y gatos)$/i.test(String(m).trim());
 
+// Un link de Google Drive ("Compartir → Copiar enlace") no se puede mostrar tal cual en una página:
+// se pasa al formato de imagen directa. Los demás links quedan igual.
+function linkDeDrive(url) {
+  const m = String(url || "").match(/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]{20,})/);
+  return m ? "https://lh3.googleusercontent.com/d/" + m[1] : String(url || "");
+}
+
 const ORDEN_TIPOS = ["Comida", "Juguetes", "Accesorios", "Higiene"];
 const ordenarTipos = (lista) =>
   [...lista].sort((a, b) => {
@@ -94,7 +101,7 @@ async function cargarPlanilla() {
     if (col("activo") >= 0 && !esVerdadero(dato("activo"))) continue;
 
     const stock = dato("stock") === "" ? null : aNumero(dato("stock"));
-    let foto = dato("foto");
+    let foto = linkDeDrive(dato("foto"));
     if (foto && !/^https?:\/\//i.test(foto)) foto = (PLANILLA.baseImagenes || "") + foto;
 
     nuevos.push({

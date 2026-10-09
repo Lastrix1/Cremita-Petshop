@@ -118,7 +118,7 @@ function renderGrilla() {
   $("grilla").innerHTML = visibles
     .map((p) => {
       const imagen = p.imagen
-        ? `<img src="${escapar(p.imagen)}" alt="${escapar(p.nombre)}" loading="lazy">`
+        ? `<img src="${escapar(p.imagen)}" alt="${escapar(p.nombre)}" loading="lazy" referrerpolicy="no-referrer">`
         : `<i class="ti ${escapar(p.icono || "ti-paw")}" aria-hidden="true"></i>`;
       const sinStock = !hayStock(p);
       // El cliente ya tiene en el carrito todo el stock que hay de este producto
