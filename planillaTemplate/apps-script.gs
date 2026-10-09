@@ -35,6 +35,10 @@ const HOJA_PRODUCTOS = 'Productos';
 const HOJA_PEDIDOS = 'Pedidos';
 const NOMBRE_TIENDA = 'Cremita Petshop';
 
+// Alias para transferir, que va en el mensaje de confirmación con el total del pedido.
+// Si queda vacío (''), el mensaje sale sin esa parte.
+const ALIAS_PAGO = 'cremita.pet.shop.mp';
+
 // Columnas de versiones anteriores que "Preparar planilla" saca si están
 const COLUMNAS_A_SACAR = ['▲', '▼', 'ajustar'];
 
@@ -523,7 +527,10 @@ function linkSegunEstado_(hoja, c, fila, d, actual, estado, nota) {
   const msg = estado === 'confirmado'
     ? hola + pedido + ' quedó confirmado:\n' +
       String(v('detalle')).split('\n').map(l => l.trim()).filter(Boolean).map(l => '• ' + l.replace(/^(\d+x\s*)\[[^\]]*\]\s*/, '$1')).join('\n') +
-      (Number(v('total')) ? '\nTotal: ' + pesos_(Number(v('total'))) : '') + '\n¡Gracias por tu compra!'
+      (Number(v('total')) ? '\nTotal: ' + pesos_(Number(v('total'))) : '') +
+      (ALIAS_PAGO ? '\n\nPodés transferir' + (Number(v('total')) ? ' ' + pesos_(Number(v('total'))) : '') +
+        ' al alias: ' + ALIAS_PAGO + '\nCuando transfieras, mandanos el comprobante por acá.' : '') +
+      '\n\nNos ponemos en contacto para coordinar la entrega. ¡Gracias por tu compra!'
     : estado === 'cancelado'
     ? hola + pedido + ' tuvo que ser cancelado. Si querés, te ayudamos a armar otro. ¡Perdón por las molestias!'
     : estado === 'sinstock'
