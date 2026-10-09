@@ -113,6 +113,8 @@ async function cargarPlanilla() {
       porKilo: /^kg$/i.test(dato("unidad")), // columna "unidad" = kg → se vende suelto por kilo
     });
   }
+  // Orden alfabético por nombre (sin importar mayúsculas ni tildes; "2 kg" antes que "10 kg")
+  nuevos.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base", numeric: true }));
   // Sin productos activos es válido: la página muestra el catálogo vacío
   PRODUCTOS.length = 0;
   PRODUCTOS.push(...nuevos);

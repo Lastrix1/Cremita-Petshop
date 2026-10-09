@@ -881,13 +881,17 @@ function leerProductos_(libro) {
 function ponerIdsFaltantes_(hoja) {
   const valores = hoja.getDataRange().getValues();
   const titulos = valores[0].map(t => String(t).trim().toLowerCase());
-  const cId = titulos.indexOf('id'), cNombre = titulos.indexOf('nombre');
+  const cId = titulos.indexOf('id'), cNombre = titulos.indexOf('nombre'), cActivo = titulos.indexOf('activo');
   let mayor = 0;
   for (let i = 1; i < valores.length; i++) mayor = Math.max(mayor, Number(valores[i][cId]) || 0);
   for (let i = 1; i < valores.length; i++) {
     if (String(valores[i][cNombre]).trim() && String(valores[i][cId]).trim() === '') {
       mayor += 1;
       hoja.getRange(i + 1, cId + 1).setValue(mayor);
+      // Producto nuevo: casilla "activo" destildada (se tilda cuando tenga precio y esté listo)
+      if (cActivo >= 0 && valores[i][cActivo] === '') {
+        hoja.getRange(i + 1, cActivo + 1).insertCheckboxes().setFontColor(COLOR_CASILLA);
+      }
     }
   }
 }
