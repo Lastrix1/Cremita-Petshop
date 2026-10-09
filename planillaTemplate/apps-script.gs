@@ -78,6 +78,7 @@ function doPost(e) {
   try {
     const datos = JSON.parse(e.postData.contents);
     const libro = SpreadsheetApp.getActiveSpreadsheet();
+    if (datos.tipo === 'solicitud') return responder_(guardarSolicitud_(libro, datos));   // "Pedí un producto" de la página
     const productos = leerProductos_(libro);
 
     // Solo productos que existen, cantidades razonables
@@ -748,7 +749,7 @@ const ESTILO = { encabezado: '#904d23', textoEncabezado: '#ffffff', texto: '#000
 function darEstilo_(libro) {
   libro.getSheets().forEach(hoja => {
     const ancho = hoja.getLastColumn();
-    if (!ancho || hoja.isSheetHidden() || hoja.getName() === 'Cómo está armada') return;
+    if (!ancho || hoja.isSheetHidden() || ['Cómo está armada', 'Instrucciones'].includes(hoja.getName())) return;   // la guía tiene su propio formato
     const filas = hoja.getMaxRows();
     hoja.getBandings().forEach(b => b.remove());
     const todo = hoja.getRange(1, 1, filas, ancho);
@@ -1038,4 +1039,39 @@ function htmlFoto_(info) {
       .subirFoto({ id: info.id, fila: info.fila, base64 });
   };
   </script></body></html>`;
+}
+
+
+// ---------- Solicitudes ("Pedí un producto" de la página) ----------
+// Cada consulta de un cliente por un producto que no está en la página queda en la hoja "Solicitudes",
+// con un link para escribirle por WhatsApp y una casilla "resuelta" para ir tachando.
+const HOJA_SOLICITUDES = 'Solicitudes';
+const TITULOS_SOLICITUDES = ['fecha', 'producto', 'para', 'detalle', 'nombre', 'telefono', 'whatsapp', 'resuelta'];
+
+function guardarSolicitud_(libro, datos) {
+  const producto = textoSeguro_(datos.producto, 120);
+  if (!producto) return { ok: false, error: 'falta el producto' };
+  let hoja = libro.getSheetByName(HOJA_SOLICITUDES);
+  if (!hoja) {
+    hoja = libro.insertSheet(HOJA_SOLICITUDES);
+    hoja.getRange(1, 1, 1, TITULOS_SOLICITUDES.length).setValues([TITULOS_SOLICITUDES])
+      .setBackground(ESTILO.encabezado).setFontColor(ESTILO.textoEncabezado).setFontWeight('bold').setHorizontalAlignment('center');
+    hoja.setFrozenRows(1);
+    hoja.getRange(1, 1, hoja.getMaxRows(), TITULOS_SOLICITUDES.length).createFilter();
+    hoja.setColumnWidth(2, 260); hoja.setColumnWidth(4, 220);
+    hoja.getRange('F2:F').setNumberFormat('@');
+  }
+  const telefono = String(datos.telefono || '').replace(/[^\d]/g, '').slice(0, 15);
+  const nombre = textoSeguro_(datos.nombre, 60);
+  const fila = [new Date(), producto, textoSeguro_(datos.para, 20), textoSeguro_(datos.detalle, 160), nombre, telefono, '', false];
+  hoja.appendRow(fila);
+  const n = hoja.getLastRow();
+  hoja.getRange(n, 8).insertCheckboxes().setFontColor(COLOR_CASILLA);
+  const tel = numeroWhatsApp_(telefono);
+  if (tel) {
+    const texto = '¡Hola' + (nombre ? ' ' + nombre.split(' ')[0] : '') + '! Te escribo de ' + NOMBRE_TIENDA + ' por tu consulta: "' + producto + '".';
+    hoja.getRange(n, 7).setRichTextValue(SpreadsheetApp.newRichTextValue().setText('Escribirle')
+      .setLinkUrl('https://wa.me/' + tel + '?text=' + encodeURIComponent(texto)).build());
+  }
+  return { ok: true };
 }

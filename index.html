@@ -56,6 +56,7 @@
     <nav class="nav">
       <a href="#quienes-somos">Quiénes somos</a>
       <a href="#productos">Productos</a>
+      <a href="#pedi-un-producto">Pedí un producto</a>
     </nav>
     <button class="btn-carrito" id="abrir-carrito" aria-label="Abrir carrito">
       <i class="ti ti-shopping-cart" aria-hidden="true"></i>
@@ -83,7 +84,10 @@
             </p>
             <p class="nota-firma"><i class="ti ti-paw" aria-hidden="true"></i> Cremita</p>
           </article>
-          <a href="#productos" class="btn-primario">Ver productos <i class="ti ti-arrow-down" aria-hidden="true"></i></a>
+          <div class="quienes-botones">
+            <a href="#productos" class="btn-primario">Ver productos <i class="ti ti-arrow-down" aria-hidden="true"></i></a>
+            <a href="#pedi-un-producto" class="btn-secundario">Pedí un producto <i class="ti ti-message-circle" aria-hidden="true"></i></a>
+          </div>
         </div>
         <ul class="quienes-destacados">
           <!-- PLACEHOLDER: ajustar a lo que ofrezca la petshop -->
@@ -107,6 +111,62 @@
         </div>
         <div class="grilla" id="grilla"></div>
         <p class="sin-resultados" id="sin-resultados" hidden>No encontramos productos con ese filtro.</p>
+        <!-- ¿No encontrás lo que buscás? → consulta por WhatsApp (si hay algo escrito en el buscador, va en el mensaje) -->
+        <div class="pedir-producto" id="pedir-producto" hidden>
+          <i class="ti ti-search" aria-hidden="true"></i>
+          <div class="pedir-producto-texto">
+            <strong>¿No encontrás lo que buscás?</strong>
+            <span>Contanos qué producto necesitás y te decimos si lo podemos conseguir.</span>
+          </div>
+          <a class="btn-pedir-producto" id="btn-pedir-producto" href="#pedi-un-producto">
+            <i class="ti ti-message-circle" aria-hidden="true"></i> Pedilo acá
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pedí un producto: el cliente cuenta qué busca; se abre WhatsApp y queda anotado en la hoja "Solicitudes" -->
+    <section class="solicitar" id="pedi-un-producto">
+      <div class="contenedor solicitar-grid">
+        <div class="solicitar-intro">
+          <h2>Pedí un producto</h2>
+          <p>¿Buscás algo que no está en la página? Contanos qué necesitás para tu mascota y te avisamos si lo conseguimos.</p>
+          <ul>
+            <li><i class="ti ti-search" aria-hidden="true"></i> Lo buscamos con nuestros proveedores</li>
+            <li><i class="ti ti-brand-whatsapp" aria-hidden="true"></i> Te respondemos por WhatsApp</li>
+            <li><i class="ti ti-paw" aria-hidden="true"></i> Si se pide seguido, lo sumamos a la página</li>
+          </ul>
+        </div>
+        <form class="solicitar-form" id="form-solicitud" novalidate>
+          <label class="sol-campo">
+            <span>¿Qué producto buscás? *</span>
+            <input id="sol-producto" maxlength="120" placeholder="Ej: Pro Plan gato castrado 3 Kg" autocomplete="off">
+          </label>
+          <div class="sol-campo">
+            <span>Es para</span>
+            <div class="sol-opciones" role="radiogroup" aria-label="Es para">
+              <label><input type="radio" name="sol-para" value="Perro"> Perro</label>
+              <label><input type="radio" name="sol-para" value="Gato"> Gato</label>
+              <label><input type="radio" name="sol-para" value="Otra mascota"> Otra</label>
+            </div>
+          </div>
+          <label class="sol-campo">
+            <span>Marca, tamaño o algún detalle <small>(opcional)</small></span>
+            <input id="sol-detalle" maxlength="160" placeholder="Ej: el de bolsa violeta, para gato adulto" autocomplete="off">
+          </label>
+          <div class="sol-fila">
+            <label class="sol-campo">
+              <span>Tu nombre *</span>
+              <input id="sol-nombre" maxlength="40" autocomplete="given-name">
+            </label>
+            <label class="sol-campo">
+              <span>Tu celular *</span>
+              <input id="sol-telefono" inputmode="tel" maxlength="20" placeholder="11 2345-6789" autocomplete="tel">
+            </label>
+          </div>
+          <p class="sol-aviso" id="sol-aviso" hidden></p>
+          <button type="submit" class="btn-primario sol-enviar"><i class="ti ti-brand-whatsapp" aria-hidden="true"></i> Enviar consulta</button>
+        </form>
       </div>
     </section>
 

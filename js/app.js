@@ -114,6 +114,12 @@ function tituloTarjeta(nombre) {
   return `${escapar(m[1])}<span class="tarjeta-aclaracion">${escapar(m[2])}</span>`;
 }
 
+// WhatsApp para preguntar por un producto "a pedido" (stock vacío en la planilla)
+function linkConsulta(p) {
+  const mensaje = `¡Hola Cremita! ¿Tienen stock de ${p.nombre}?`;
+  return `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(mensaje)}`;
+}
+
 function renderGrilla() {
   const texto = busqueda.trim().toLowerCase();
   const visibles = PRODUCTOS.filter(
@@ -128,10 +134,14 @@ function renderGrilla() {
       const imagen = p.imagen
         ? `<img src="${escapar(p.imagen)}" alt="${escapar(p.nombre)}" loading="lazy" referrerpolicy="no-referrer">`
         : `<i class="ti ${escapar(p.icono || "ti-paw")}" aria-hidden="true"></i>`;
-      const sinStock = !hayStock(p);
+      // Stock vacío en la planilla = "a pedido": no se agrega al carrito, se consulta por WhatsApp
+      const consultar = p.stock == null && !!CONFIG.whatsapp;
+      const sinStock = !consultar && !hayStock(p);
       // El cliente ya tiene en el carrito todo el stock que hay de este producto
       const alTope = !sinStock && p.stock != null && (carrito[p.id] || 0) >= maximoPermitido(p);
-      const cartel = sinStock
+      const cartel = consultar
+        ? `<span class="cartel-stock consultar">Consultar stock</span>`
+        : sinStock
         ? `<span class="cartel-stock">Sin stock</span>`
         : alTope
         ? `<span class="cartel-stock">No quedan más</span>`
@@ -146,9 +156,13 @@ function renderGrilla() {
             <h3>${tituloTarjeta(p.nombre)}</h3>
             <div class="tarjeta-pie">
               <span class="precio">${formatoPrecio(p.precio)}${p.porKilo ? `<small class="por-kilo"> / kg</small>` : ""}</span>
-              <button class="btn-agregar" data-agregar="${p.id}" aria-label="${sinStock ? "Sin stock" : "Agregar " + escapar(p.nombre)}" ${sinStock || (carrito[p.id] || 0) >= maximoPermitido(p) ? "disabled" : ""}>
+              ${consultar
+                ? `<a class="btn-consultar" href="${linkConsulta(p)}" target="_blank" rel="noopener" aria-label="Consultar stock de ${escapar(p.nombre)}">
+                    <i class="ti ti-brand-whatsapp" aria-hidden="true"></i> Consultar
+                  </a>`
+                : `<button class="btn-agregar" data-agregar="${p.id}" aria-label="${sinStock ? "Sin stock" : "Agregar " + escapar(p.nombre)}" ${sinStock || (carrito[p.id] || 0) >= maximoPermitido(p) ? "disabled" : ""}>
                 <i class="ti ti-plus" aria-hidden="true"></i>
-              </button>
+              </button>`}
             </div>
           </div>
         </article>`;
@@ -159,6 +173,91 @@ function renderGrilla() {
     ? "No encontramos productos con ese filtro."
     : "Por ahora no hay productos disponibles. ¡Volvé pronto!";
   $("sin-resultados").hidden = visibles.length > 0;
+  if (texto && !visibles.length && PRODUCTOS.length) $("sin-resultados").textContent = `No encontramos "${busqueda.trim()}".`;
+  actualizarPedirProducto();
+}
+
+// Cartel "¿No encontrás lo que buscás?" debajo de los productos: lleva a "Pedí un producto"
+function actualizarPedirProducto() {
+  const caja = $("pedir-producto");
+  if (caja) caja.hidden = !CONFIG.whatsapp || !$("form-solicitud");
+}
+
+// ---------- Pedí un producto ----------
+
+function avisoSolicitud(texto, campo, ok) {
+  const aviso = $("sol-aviso");
+  aviso.innerHTML = `<i class="ti ${ok ? "ti-circle-check" : "ti-alert-triangle"}" aria-hidden="true"></i> <span>${escapar(texto)}</span>`;
+  aviso.className = "sol-aviso" + (ok ? " ok" : "");
+  aviso.hidden = false;
+  aviso.setAttribute("role", ok ? "status" : "alert");
+  document.querySelectorAll(".solicitar-form .campo-error").forEach((c) => c.classList.remove("campo-error"));
+  if (campo) {
+    campo.classList.add("campo-error");
+    campo.focus();
+  }
+}
+
+function iniciarSolicitud() {
+  const form = $("form-solicitud");
+  if (!form) return;
+  if (!CONFIG.whatsapp) {
+    $("pedi-un-producto").hidden = true;
+    document.querySelectorAll('a[href="#pedi-un-producto"]').forEach((a) => (a.hidden = true));
+    return;
+  }
+  // Nombre y celular: los mismos que se usan en el carrito
+  try {
+    const c = JSON.parse(localStorage.getItem(CLAVE_COMPRADOR)) || {};
+    $("sol-nombre").value = c.nombre || "";
+    $("sol-telefono").value = c.telefono || "";
+  } catch {}
+
+  // Desde el cartel de abajo de los productos: trae lo que se buscó
+  $("btn-pedir-producto").addEventListener("click", () => {
+    if (busqueda.trim() && !$("sol-producto").value.trim()) $("sol-producto").value = busqueda.trim();
+    setTimeout(() => $("sol-producto").focus({ preventScroll: true }), 400);
+  });
+
+  form.addEventListener("input", (e) => {
+    e.target.classList.remove("campo-error");
+    if (!$("sol-aviso").classList.contains("ok")) $("sol-aviso").hidden = true;
+  });
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const producto = $("sol-producto").value.replace(/\s+/g, " ").trim();
+    const detalle = $("sol-detalle").value.replace(/\s+/g, " ").trim();
+    const nombre = $("sol-nombre").value.replace(/\s+/g, " ").trim();
+    const celular = normalizarCelular($("sol-telefono").value);
+    const para = (form.querySelector('input[name="sol-para"]:checked') || {}).value || "";
+
+    if (producto.length < 3) return avisoSolicitud("Escribí qué producto buscás.", $("sol-producto"));
+    if (!nombreValido(nombre)) return avisoSolicitud("Escribí tu nombre (solo letras).", $("sol-nombre"));
+    if (!celular) return avisoSolicitud("Revisá el celular: con código de área, ej: 11 2345-6789.", $("sol-telefono"));
+
+    try {
+      localStorage.setItem(CLAVE_COMPRADOR, JSON.stringify({ nombre, telefono: $("sol-telefono").value.trim() }));
+    } catch {}
+
+    const lineas = [
+      "¡Hola Cremita! Quería saber si pueden conseguir:",
+      `• ${producto}`,
+      para && `• Para: ${para.toLowerCase()}`,
+      detalle && `• Detalle: ${detalle}`,
+    ].filter(Boolean);
+    const mensaje = lineas.join("\n") + `\n\nSoy ${nombre}.`;
+    window.open(`https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(mensaje)}`, "_blank", "noopener");
+
+    // Queda anotado en la planilla (hoja "Solicitudes") para que Cremita vea qué le piden
+    if (typeof registrarPedido === "function") {
+      registrarPedido({ tipo: "solicitud", producto, para, detalle, nombre, telefono: celular });
+    }
+    $("sol-producto").value = "";
+    $("sol-detalle").value = "";
+    form.querySelectorAll('input[name="sol-para"]').forEach((r) => (r.checked = false));
+    avisoSolicitud("¡Listo! Se abrió WhatsApp con tu consulta: solo falta tocar Enviar.", null, true);
+  });
 }
 
 // ---------- Carrito ----------
@@ -440,6 +539,7 @@ $("vaciar-carrito").addEventListener("click", () => {
 async function iniciar() {
   renderContacto();
   cargarComprador();
+  iniciarSolicitud();
   if (typeof PLANILLA !== "undefined" && (PLANILLA.productosCsv || PLANILLA.pedidosUrl)) {
     $("grilla").innerHTML = `<p class="cargando">Cargando productos…</p>`;
     try {
