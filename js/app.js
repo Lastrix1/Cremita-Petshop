@@ -38,21 +38,20 @@ function buscarProducto(id) {
   return PRODUCTOS.find((p) => String(p.id) === String(id));
 }
 
-// ---------- Stock (viene de la planilla; null = sin control de stock) ----------
+// ---------- Stock ----------
+// El stock es solo para uso interno de la planilla: en la página todo se puede pedir
+// y no se muestran carteles de stock. Cremita después ve qué tiene y qué tiene que comprar.
 
-const hayStock = (p) => p.stock == null || p.stock >= 1;
-const maximoPermitido = (p) => (p.stock == null ? 99 : Math.max(0, Math.floor(p.stock))); // por kilo: solo kilos enteros
+const MAXIMO = 99; // tope por producto, igual que en la planilla
 
 // Cantidad para mostrar: "2" o "2 kg" si se vende suelto
 const cantidadTexto = (p, n) => (p.porKilo ? `${n} kg` : `${n}`);
 
-// Saca del carrito lo que ya no hay y ajusta cantidades al stock disponible
+// Saca del carrito los productos que ya no están en la lista
 function ajustarCarritoAlStock() {
   for (const id of Object.keys(carrito)) {
-    const p = buscarProducto(id);
-    const max = p ? maximoPermitido(p) : 0;
-    if (!max) delete carrito[id];
-    else if (carrito[id] > max) carrito[id] = max;
+    if (!buscarProducto(id)) delete carrito[id];
+    else if (carrito[id] > MAXIMO) carrito[id] = MAXIMO;
   }
   guardarCarrito();
 }
@@ -114,12 +113,6 @@ function tituloTarjeta(nombre) {
   return `${escapar(m[1])}<span class="tarjeta-aclaracion">${escapar(m[2])}</span>`;
 }
 
-// WhatsApp para preguntar por un producto "a pedido" (stock vacío en la planilla)
-function linkConsulta(p) {
-  const mensaje = `¡Hola Cremita! ¿Tienen stock de ${p.nombre}?`;
-  return `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(mensaje)}`;
-}
-
 function renderGrilla() {
   const texto = busqueda.trim().toLowerCase();
   const visibles = PRODUCTOS.filter(
@@ -134,35 +127,18 @@ function renderGrilla() {
       const imagen = p.imagen
         ? `<img src="${escapar(p.imagen)}" alt="${escapar(p.nombre)}" loading="lazy" referrerpolicy="no-referrer">`
         : `<i class="ti ${escapar(p.icono || "ti-paw")}" aria-hidden="true"></i>`;
-      // Stock vacío en la planilla = "a pedido": no se agrega al carrito, se consulta por WhatsApp
-      const consultar = p.stock == null && !!CONFIG.whatsapp;
-      const sinStock = !consultar && !hayStock(p);
-      // El cliente ya tiene en el carrito todo el stock que hay de este producto
-      const alTope = !sinStock && p.stock != null && (carrito[p.id] || 0) >= maximoPermitido(p);
-      const cartel = consultar
-        ? `<span class="cartel-stock consultar">Consultar stock</span>`
-        : sinStock
-        ? `<span class="cartel-stock">Sin stock</span>`
-        : alTope
-        ? `<span class="cartel-stock">No quedan más</span>`
-        : p.stock != null && p.stock <= 3
-          ? `<span class="cartel-stock ultimas">¡Últimas unidades!</span>`
-          : "";
+      const enCarrito = carrito[p.id] || 0;
       return `
-        <article class="tarjeta${sinStock ? " sin-stock" : alTope ? " al-tope" : ""}">
-          <div class="tarjeta-imagen">${imagen}${cartel}</div>
+        <article class="tarjeta">
+          <div class="tarjeta-imagen">${imagen}</div>
           <div class="tarjeta-cuerpo">
             <span class="tarjeta-categoria">${p.mixto ? "Perros y gatos" : escapar(p.categoria)} · ${escapar(p.subcategoria)}${p.porKilo ? " · suelto por kilo" : ""}</span>
             <h3>${tituloTarjeta(p.nombre)}</h3>
             <div class="tarjeta-pie">
               <span class="precio">${formatoPrecio(p.precio)}${p.porKilo ? `<small class="por-kilo"> / kg</small>` : ""}</span>
-              ${consultar
-                ? `<a class="btn-consultar" href="${linkConsulta(p)}" target="_blank" rel="noopener" aria-label="Consultar stock de ${escapar(p.nombre)}">
-                    <i class="ti ti-brand-whatsapp" aria-hidden="true"></i> Consultar
-                  </a>`
-                : `<button class="btn-agregar" data-agregar="${p.id}" aria-label="${sinStock ? "Sin stock" : "Agregar " + escapar(p.nombre)}" ${sinStock || (carrito[p.id] || 0) >= maximoPermitido(p) ? "disabled" : ""}>
+              <button class="btn-agregar" data-agregar="${p.id}" aria-label="Agregar ${escapar(p.nombre)}" ${enCarrito >= MAXIMO ? "disabled" : ""}>
                 <i class="ti ti-plus" aria-hidden="true"></i>
-              </button>`}
+              </button>
             </div>
           </div>
         </article>`;
@@ -265,13 +241,13 @@ function iniciarSolicitud() {
 function cambiarCantidad(id, delta) {
   const p = buscarProducto(id);
   if (!p) return;
-  const nueva = Math.min((carrito[id] || 0) + delta, maximoPermitido(p)); // no deja pasar el stock
+  const nueva = Math.min((carrito[id] || 0) + delta, MAXIMO); // tope por producto
   if (nueva > 0) carrito[id] = nueva;
   else delete carrito[id];
   if (delta > 0) ultimoPedido = null; // empezó otro pedido: se saca el "¡Gracias!"
   guardarCarrito();
   renderCarrito();
-  renderGrilla(); // para activar o desactivar el "+" si se llegó al stock
+  renderGrilla(); // para activar o desactivar el "+" si se llegó al tope
 }
 
 function calcularTotal() {
@@ -292,6 +268,7 @@ function renderCarrito() {
     ? ids
         .map((id) => {
           const p = buscarProducto(id);
+          const n = carrito[id];
           return `
             <div class="item">
               <div class="item-info">
@@ -300,10 +277,10 @@ function renderCarrito() {
               </div>
               <div class="item-cantidad">
                 <button data-restar="${p.id}" aria-label="Quitar uno">−</button>
-                <span>${cantidadTexto(p, carrito[id])}</span>
-                <button data-agregar="${p.id}" aria-label="Agregar uno" ${carrito[id] >= maximoPermitido(p) ? "disabled" : ""}>+</button>
+                <span>${cantidadTexto(p, n)}</span>
+                <button data-agregar="${p.id}" aria-label="Agregar uno" ${n >= MAXIMO ? "disabled" : ""}>+</button>
               </div>
-              <span class="item-subtotal">${formatoPrecio(p.precio * carrito[id])}</span>
+              <span class="item-subtotal">${formatoPrecio(p.precio * n)}</span>
             </div>`;
         })
         .join("")
@@ -531,7 +508,7 @@ $("vaciar-carrito").addEventListener("click", () => {
   ultimoPedido = null; // también saca el cartel de "¡Gracias por tu pedido!"
   guardarCarrito();
   renderCarrito();
-  renderGrilla(); // vuelve a activar los "agregar" que estaban al tope del stock
+  renderGrilla(); // vuelve a activar los "agregar" que estaban al tope
 });
 
 // ---------- Arranque ----------

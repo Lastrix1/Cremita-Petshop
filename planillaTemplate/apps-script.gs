@@ -5,9 +5,10 @@
 //  0. Le pasa los productos a la página al instante (?productos=1).
 //  1. Recibe los pedidos de la página (con nombre y teléfono del comprador)
 //     y los anota en la hoja "Pedidos". Los precios salen de "Productos".
-//  2. Tildar "confirmado" descuenta el stock (si no alcanza, no confirma y avisa).
-//     Destildarlo lo devuelve. Cada vez revisa TODOS los pedidos, así un clic
-//     que Google se saltee se acomoda solo.
+//  2. Tildar "confirmado" descuenta el stock que haya. Lo que no alcanza queda "a pedido"
+//     (columna "a pedido" y hoja "Para comprar"). El stock es solo interno: al cliente no se le
+//     menciona; cuando todo está comprado el link pasa a "Avisar que está listo". Destildarlo devuelve lo que se descontó. Cada vez revisa TODOS los pedidos,
+//     así un clic que Google se saltee se acomoda solo.
 //  3. Tildar "cancelado" devuelve el stock (si estaba confirmado) y tacha el pedido.
 //  4. Columna "whatsapp": al confirmar aparece "Avisar confirmación" y al cancelar
 //     "Avisar cancelación" (abren el chat del comprador con el mensaje ya escrito).
@@ -15,8 +16,7 @@
 //  5. En la celda de "stock": -3 → baja 3; 9+5 → hace la cuenta (14);
 //     8 → queda en 8. Nunca baja de 0.
 //  6. Si se agrega un producto nuevo sin "id", le pone uno solo.
-//  7. Si al confirmar no alcanza el stock, el link pasa a "Avisar falta de stock".
-//     El pedido se puede editar a mano en "detalle" (mientras no esté confirmado):
+//  7. El pedido se puede editar a mano en "detalle" (mientras no esté confirmado):
 //     cambiar "3x" por "1x", borrar una línea o agregar "1x Nombre del producto".
 //     El script recalcula el total y lo que se descuenta.
 //  8. Tildar "entregado" (en un pedido confirmado) lo pasa a la hoja "Entregados", con su
@@ -24,14 +24,14 @@
 //     ventas, costo y ganancia por mes.
 //
 // Menú "Cremita" (arriba en la planilla):
-//   · Preparar planilla        → agrega las columnas nuevas que falten (se puede usar siempre)
+//   · Preparar planilla        → agrega columnas que falten y crea el activador de ediciones (usarlo 1 vez después de pegar el script)
 //   · Revisar pedidos y stock  → acomoda cualquier pedido que haya quedado desparejo
 //   · Borrar pedidos cancelados
 //
 // Las columnas se buscan por su TÍTULO (fila 1), así que se pueden mover de lugar.
 //   Productos: id | activo | nombre | precio | stock | mascota | tipo | foto | icono
-//   Pedidos:   fecha | pedido | nombre | telefono | detalle | total | confirmado | cancelado |
-//              whatsapp | descontado | items
+//   Pedidos:   fecha | pedido | nombre | telefono | detalle | a pedido | total | confirmado |
+//              cancelado | whatsapp | descontado | items
 // =====================================================================
 
 const HOJA_PRODUCTOS = 'Productos';
@@ -49,7 +49,10 @@ const COLUMNAS_A_SACAR = ['▲', '▼', 'ajustar'];
 const COLUMNAS_PEDIDOS = [
   ['nombre', 'pedido'], ['telefono', 'nombre'],
   ['cancelado', 'confirmado'], ['whatsapp', 'cancelado'], ['entregado', 'cancelado'],
+  ['a pedido', 'detalle'],
 ];
+const NOTA_A_PEDIDO = 'Se completa sola al confirmar: lo que no alcanzó el stock y hay que encargar al proveedor. ' +
+  'Si algo no se consigue: destildá "confirmado", sacalo del detalle y confirmá de nuevo (el mensaje se actualiza).';
 const CASILLAS_PEDIDOS = ['confirmado', 'cancelado', 'entregado', 'descontado'];
 
 // Hojas de ventas (las crea "Preparar planilla"). "Costos" NO se publica: ahí va lo que le cuesta cada producto.
@@ -141,6 +144,7 @@ function onOpen() {
 function prepararPlanilla() {
   const libro = SpreadsheetApp.getActiveSpreadsheet();
   const agregadas = conCandado_(() => {
+    instalarActivador_();
     sacarColumnas_(libro.getSheetByName(HOJA_PRODUCTOS), COLUMNAS_A_SACAR);
     const prod = libro.getSheetByName(HOJA_PRODUCTOS), cp = columnas_(prod);
     if (cp.stock && prod.getLastRow() > 1) {
@@ -162,6 +166,7 @@ function prepararPlanilla() {
     // Casillas de los pedidos que ya estaban (por si se importaron sin casillas)
     if (hoja.getLastRow() > 1) CASILLAS_PEDIDOS.forEach(t => { if (c[t]) casillasDeVerdad_(hoja.getRange(2, c[t], hoja.getLastRow() - 1, 1)); });
     const cPed = columnas_(libro.getSheetByName(HOJA_PEDIDOS));
+    if (cPed['a pedido']) libro.getSheetByName(HOJA_PEDIDOS).getRange(1, cPed['a pedido']).setNote(NOTA_A_PEDIDO);
     if (cPed.items) libro.getSheetByName(HOJA_PEDIDOS).hideColumns(cPed.items);   // es para el script, no hace falta verla
     // "descontado" la maneja solo el script: se oculta para que nadie la tilde sin querer
     if (cPed.descontado) libro.getSheetByName(HOJA_PEDIDOS).hideColumns(cPed.descontado);
@@ -169,6 +174,7 @@ function prepararPlanilla() {
     prepararVentas_();
     darEstilo_(libro);
     revisarPedidos_();
+    armarParaComprar_();
     return a;
   });
   if (agregadas === null) return;
@@ -206,11 +212,37 @@ function borrarCancelados() {
 
 // ---------- Cuando se edita la planilla ----------
 
+// Las ediciones las atiende un ACTIVADOR INSTALADO ("alEditar"), que se crea con
+// Cremita → Preparar planilla. El onEdit simple de Google no respeta bien el candado:
+// dos clics casi juntos corrían a la vez y descontaban o devolvían stock dos veces.
+// Mientras el activador no esté creado, el onEdit simple sigue funcionando como antes.
+const CLAVE_ACTIVADOR = 'activadorEdicion';
 function onEdit(e) {
+  let instalado = false;
+  try { instalado = PropertiesService.getDocumentProperties().getProperty(CLAVE_ACTIVADOR) === '1'; } catch (err) {}
+  if (!instalado) alEditar(e);
+}
+
+// Crea (una sola vez) el activador que atiende las ediciones
+function instalarActivador_() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'alEditar').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('alEditar').forSpreadsheet(libro).onEdit().create();
+  PropertiesService.getDocumentProperties().setProperty(CLAVE_ACTIVADOR, '1');
+}
+
+function alEditar(e) {
   const hoja = e.range.getSheet();
   const nombre = hoja.getName();
   const desde = e.range.getColumn(), hasta = desde + e.range.getNumColumns() - 1;
   const tocada = col => col && col >= desde && col <= hasta;
+
+  if (nombre === HOJA_PARA_COMPRAR) {
+    const unaCelda = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
+    // Columnas 7 (comprado) y 8 (no se consiguió) → 1 y 2 para tildeParaComprar_
+    if (unaCelda && e.range.getRow() > 1 && (desde === 7 || desde === 8)) conCandado_(() => tildeParaComprar_(hoja, e.range.getRow(), desde - 6, e.range.getValue() === true), true);
+    return;
+  }
 
   if (nombre === HOJA_PRODUCTOS) {
     const c = columnas_(hoja);
@@ -228,7 +260,7 @@ function onEdit(e) {
 
   const c = columnas_(hoja);
   if (tocada(c.entregado)) {
-    conCandado_(() => { revisarPedidos_(); pasarEntregados_(); }, true);
+    conCandado_(() => { revisarPedidos_(); pasarEntregados_(); armarParaComprar_(); }, true);
     return;
   }
   const unaCelda = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
@@ -250,9 +282,10 @@ function leerGuardado_(crudo) {
   try {
     const g = JSON.parse(crudo || '[]');
     return Array.isArray(g) ? { items: g, texto: null, desc: undefined }
-      : { items: g.items || [], texto: g.texto == null ? null : String(g.texto), desc: typeof g.desc === 'boolean' ? g.desc : undefined };
+      : { items: g.items || [], texto: g.texto == null ? null : String(g.texto), desc: typeof g.desc === 'boolean' ? g.desc : undefined,
+          faltantes: Array.isArray(g.faltantes) ? g.faltantes : [] };
   } catch (err) {
-    return { items: [], texto: null };
+    return { items: [], texto: null, faltantes: [] };
   }
 }
 
@@ -392,6 +425,11 @@ function sumarEnCelda_(e) {
 function revisarPedidos_() {
   const libro = SpreadsheetApp.getActiveSpreadsheet();
   const hoja = libro.getSheetByName(HOJA_PEDIDOS);
+  // Columna "a pedido" (versión nueva): si no está, se agrega sola al lado de "detalle"
+  if (!columnas_(hoja)['a pedido'] && columnas_(hoja).detalle) {
+    prepararHoja_(hoja, [['a pedido', 'detalle']]);
+    hoja.getRange(1, columnas_(hoja)['a pedido']).setNote(NOTA_A_PEDIDO);
+  }
   const c = columnas_(hoja);
   const filas = hoja.getLastRow() - 1;
   if (filas < 1 || !c.confirmado || !c.descontado || !c.items) return 0;
@@ -410,6 +448,20 @@ function revisarPedidos_() {
   const stockCambiado = {};
   const movimientos = [];
   const conStock = p => p && p.stock !== null && !isNaN(p.stock);
+  // Stock leído de la planilla en ese momento (no el de cuando arrancó la revisión)
+  const refrescarStock = p => {
+    if (!p || !colStock) return;
+    const x = hojaProd.getRange(p.fila, colStock).getValue();
+    p.stock = x === '' ? null : Number(x);
+  };
+  // Cada pedido deja su marca y el stock guardados enseguida, así otra ejecución ve lo que pasó
+  const guardarStock = () => {
+    SpreadsheetApp.flush();                                     // primero la marca del pedido ("descontado")
+    if (colStock) Object.keys(stockCambiado).forEach(id => hojaProd.getRange(stockCambiado[id].fila, colStock).setValue(stockCambiado[id].stock));
+    Object.keys(stockCambiado).forEach(id => delete stockCambiado[id]);
+    anotarMovimientos_(movimientos.splice(0));
+    SpreadsheetApp.flush();
+  };
   const v = (d, t) => (c[t] ? d[c[t] - 1] : '');
   let cambios = 0;
 
@@ -439,6 +491,10 @@ function revisarPedidos_() {
       linkSegunEstado_(hoja, c, fila, d, links[i][0], cancelado ? 'cancelado' : confirmado ? 'confirmado' : sinStock ? 'sinstock' : '', notas[i][0]);
       continue;
     }
+    // Dos ejecuciones casi juntas (dos clics, o dos copias del script) podían descontar o devolver
+    // dos veces. Se relee la marca justo antes de tocar el stock: si otra ya lo hizo, no se repite.
+    SpreadsheetApp.flush();
+    if (leerGuardado_(hoja.getRange(fila, c.items).getValue()).desc === confirmado) continue;
     const guardado = guardado0;
     let items = guardado.items;                                 // para devolver: lo que se descontó
 
@@ -464,43 +520,212 @@ function revisarPedidos_() {
           if (c.detalle) d[c.detalle - 1] = guardado.texto;
         }
       }
-      // Antes de descontar, revisa que alcance el stock de TODOS los productos del pedido
-      const faltan = [];
-      items.forEach(it => {
-        const p = productos[String(it.id)];
-        if (!p) faltan.push('producto ' + it.id + ' (ya no existe)');
-        else if (conStock(p) && p.stock < it.cant) faltan.push(p.nombre + ' (pide ' + it.cant + ', hay ' + Math.max(0, p.stock) + ')');
-      });
+      // Si algún producto ya no existe en Productos, no se puede confirmar
+      const noExisten = items.filter(it => !productos[String(it.id)]).map(it => 'producto ' + it.id);
       const celda = hoja.getRange(fila, c.confirmado);
-      if (faltan.length) {
-        celda.setValue(false);                                  // no se confirma
-        const aviso = 'No alcanza el stock: ' + faltan.join(', ');
-        celda.setNote(aviso);
-        libro.toast(aviso + '. Avisale al cliente con el link de "whatsapp" y, si hace falta, editá el detalle.', 'Pedido ' + v(d, 'pedido') + ' sin confirmar', 12);
-        linkSegunEstado_(hoja, c, fila, d, links[i][0], 'sinstock', aviso);
+      if (noExisten.length) {
+        celda.setValue(false);
+        celda.setNote('Revisá el detalle: ' + noExisten.join(', ') + ' ya no está en Productos');
+        libro.toast('No se confirmó: ' + noExisten.join(', ') + ' ya no está en Productos. Sacalo del detalle.', 'Pedido ' + v(d, 'pedido') + ' sin confirmar', 12);
         continue;
       }
-      items.forEach(it => { const p = productos[String(it.id)]; if (conStock(p)) { movimientos.push([new Date(), v(d, 'pedido'), p.nombre, -it.cant, p.stock, p.stock - it.cant, 'Pedido confirmado']); p.stock -= it.cant; stockCambiado[it.id] = p; } });
+      // Reparto: lo que alcanza sale del stock; el resto queda "a pedido" (hay que encargarlo).
+      // Se hace al confirmar, con el stock de ESE momento: el primero que se confirma se queda con el stock.
+      items.forEach(it => refrescarStock(productos[String(it.id)]));
+      items = items.map(it => {
+        const p = productos[String(it.id)];
+        if (!conStock(p)) return { id: it.id, cant: it.cant };   // sin control de stock: no se descuenta nada
+        const enStock = Math.max(0, Math.min(it.cant, Math.floor(p.stock)));
+        if (enStock) { movimientos.push([new Date(), v(d, 'pedido'), p.nombre, -enStock, p.stock, p.stock - enStock, 'Pedido confirmado']); p.stock -= enStock; stockCambiado[it.id] = p; }
+        return Object.assign({ id: it.id, cant: it.cant, enStock }, it.comprado ? { comprado: true } : {});
+      });
+      const textoAPedido = textoAPedido_(items, productos);
       hoja.getRange(fila, c.descontado).setValue(true);        // se vendió: bajó el stock
-      hoja.getRange(fila, c.items).setValue(JSON.stringify({ items, texto: c.detalle ? String(d[c.detalle - 1]) : guardado.texto, desc: true }));
+      const nuevoItems = JSON.stringify({ items, texto: c.detalle ? String(d[c.detalle - 1]) : guardado.texto, desc: true, faltantes: guardado.faltantes || [] });
+      hoja.getRange(fila, c.items).setValue(nuevoItems);
+      d[c.items - 1] = nuevoItems;                              // para que el mensaje de confirmación vea el reparto
+      if (c['a pedido']) { hoja.getRange(fila, c['a pedido']).setValue(textoAPedido); d[c['a pedido'] - 1] = textoAPedido; }
       if (notas[i][0]) celda.setNote('');
+      guardarStock();
+      if (textoAPedido) libro.toast('Quedó a pedido (hay que encargarlo):\n' + textoAPedido, 'Pedido ' + v(d, 'pedido') + ' confirmado', 10);
       linkSegunEstado_(hoja, c, fila, d, links[i][0], 'confirmado');
     } else {
-      items.forEach(it => { const p = productos[String(it.id)]; if (conStock(p)) { movimientos.push([new Date(), v(d, 'pedido'), p.nombre, it.cant, p.stock, p.stock + it.cant, cancelado ? 'Pedido cancelado' : 'Pedido desconfirmado']); p.stock += it.cant; stockCambiado[it.id] = p; } });
+      // Vuelve solo lo que se había descontado (lo "a pedido" nunca salió del stock).
+      // Pedidos de antes de la versión "a pedido" no tienen enStock: se había descontado todo.
+      items.forEach(it => refrescarStock(productos[String(it.id)]));
+      items.forEach(it => {
+        const p = productos[String(it.id)];
+        if (!conStock(p)) return;
+        const volver = typeof it.enStock === 'number' ? it.enStock : it.cant;
+        if (!volver) return;
+        movimientos.push([new Date(), v(d, 'pedido'), p.nombre, volver, p.stock, p.stock + volver, cancelado ? 'Pedido cancelado' : 'Pedido desconfirmado']);
+        p.stock += volver; stockCambiado[it.id] = p;
+      });
+      items = items.map(it => Object.assign({ id: it.id, cant: it.cant }, it.comprado ? { comprado: true } : {}));  // el reparto se vuelve a hacer al confirmar
       hoja.getRange(fila, c.descontado).setValue(false);       // se canceló: volvió el stock
-      hoja.getRange(fila, c.items).setValue(JSON.stringify({ items, texto: guardado.texto, desc: false }));
+      hoja.getRange(fila, c.items).setValue(JSON.stringify({ items, texto: guardado.texto, desc: false, faltantes: guardado.faltantes || [] }));
+      if (c['a pedido']) hoja.getRange(fila, c['a pedido']).clearContent();
+      guardarStock();
       linkSegunEstado_(hoja, c, fila, d, links[i][0], cancelado ? 'cancelado' : '');
     }
     cambios++;
   }
 
-  if (colStock) Object.keys(stockCambiado).forEach(id => {
-    const p = stockCambiado[id];
-    hojaProd.getRange(p.fila, colStock).setValue(p.stock);
-  });
-  anotarMovimientos_(movimientos);
-  SpreadsheetApp.flush();
+  guardarStock();
+  armarParaComprar_();
   return cambios;
+}
+
+// ---------- Para comprar ----------
+// Hoja "Para comprar": todo lo que quedó A PEDIDO en los pedidos confirmados (y no cancelados ni entregados),
+// sumado por producto, con el proveedor y el link de la hoja "Costos". Se rearma sola, no hace falta tocarla.
+const HOJA_PARA_COMPRAR = 'Para comprar';
+function armarParaComprar_() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const ped = libro.getSheetByName(HOJA_PEDIDOS);
+  const c = columnas_(ped);
+  const productos = leerProductos_(libro);
+  // Una fila por producto y estado: primero lo que falta comprar, abajo (en gris) lo ya comprado
+  const grupos = {}, orden = [];
+  const filas = ped.getLastRow() - 1;
+  if (filas > 0 && c.items && c.confirmado) {
+    ped.getRange(2, 1, filas, ped.getLastColumn()).getValues().forEach((d, i) => {
+      if (d[c.confirmado - 1] !== true || (c.cancelado && d[c.cancelado - 1] === true)) return;
+      const g = leerGuardado_(d[c.items - 1]);
+      if (g.desc !== true) return;
+      const codigo = (c.pedido && String(d[c.pedido - 1]).trim()) || ('fila ' + (i + 2));
+      g.items.forEach(it => {
+        if (typeof it.enStock !== 'number' || it.cant <= it.enStock) return;
+        const estado = it.comprado ? 'comprado' : 'pendiente';
+        const k = estado + '|' + it.id;
+        if (!grupos[k]) { grupos[k] = { id: String(it.id), estado, cant: 0, pedidos: [] }; orden.push(k); }
+        grupos[k].cant += it.cant - it.enStock;
+        if (grupos[k].pedidos.indexOf(codigo) < 0) grupos[k].pedidos.push(codigo);
+      });
+    });
+  }
+  // Proveedor, link y costo de la hoja Costos
+  const info = {};
+  const cos = libro.getSheetByName(HOJA_COSTOS);
+  if (cos && cos.getLastRow() > 1) {
+    const cc = columnas_(cos);
+    cos.getRange(2, 1, cos.getLastRow() - 1, cos.getLastColumn()).getValues().forEach(f => {
+      const val = t => (cc[t] ? f[cc[t] - 1] : '');
+      info[String(val('id')).trim()] = { costo: val('costo'), proveedor: val('proveedor'), link: String(val('link') || '').trim() };
+    });
+  }
+  let h = libro.getSheetByName(HOJA_PARA_COMPRAR);
+  if (!h) h = libro.insertSheet(HOJA_PARA_COMPRAR, libro.getSheets().indexOf(ped) + 1);
+  const nombreDe = id => (productos[id] ? productos[id].nombre : 'producto ' + id);
+  const prov = id => String((info[id] || {}).proveedor || '~');
+  const lista = orden.map(k => grupos[k]).sort((a, b) =>
+    (a.estado === b.estado ? 0 : a.estado === 'pendiente' ? -1 : 1) || prov(a.id).localeCompare(prov(b.id)) || nombreDe(a.id).localeCompare(nombreDe(b.id)));
+
+  const titulos = ['producto', 'cantidad', 'pedidos', 'proveedor', 'link', 'costo c/u', 'comprado', 'no se consiguió', 'clave'];
+  h.clear();
+  h.getRange(1, 1, h.getMaxRows(), h.getMaxColumns()).clearDataValidations();
+  h.getRange(1, 1, 1, titulos.length).setValues([titulos])
+    .setBackground(ESTILO.encabezado).setFontColor(ESTILO.textoEncabezado).setFontWeight('bold').setHorizontalAlignment('center');
+  h.setFrozenRows(1);
+  h.getRange(1, 7).setNote('Tildalo cuando lo compraste: pasa abajo, en gris, hasta que entregues el pedido. Si te equivocaste, destildalo.');
+  h.getRange(1, 8).setNote('Tildalo si el proveedor no lo tiene: se saca del pedido (y del total) y el mensaje "Avisar confirmación" le cuenta al cliente que no se consiguió.');
+  h.getRange(1, 2).setNote('Lo que falta comprar: lo que quedó "a pedido" en los pedidos confirmados. Cuando el pedido se entrega o se cancela, sale de esta lista. Esta hoja se rearma sola.');
+  if (lista.length) {
+    const cuerpo = lista.map(x => {
+      const i = info[x.id] || {};
+      return [nombreDe(x.id), x.cant, x.pedidos.join(', '), i.proveedor || '', '',
+        i.costo === '' || i.costo == null ? '' : i.costo, x.estado === 'comprado', false, JSON.stringify({ id: x.id, estado: x.estado, pedidos: x.pedidos })];
+    });
+    h.getRange(2, 1, cuerpo.length, titulos.length).setValues(cuerpo).setFontColor(ESTILO.texto);
+    h.getRange(2, 6, cuerpo.length, 1).setNumberFormat('$#,##0');
+    h.getRange(2, 5, cuerpo.length, 1).setRichTextValues(lista.map(x => {
+      const url = (info[x.id] || {}).link;
+      return [/^https?:\/\//.test(url || '') ? SpreadsheetApp.newRichTextValue().setText('Abrir').setLinkUrl(url).build()
+        : SpreadsheetApp.newRichTextValue().setText('').build()];
+    }));
+    lista.forEach((x, n) => {
+      const fila = n + 2;
+      if (x.estado === 'pendiente') {
+        h.getRange(fila, 7, 1, 2).insertCheckboxes().setFontColor(COLOR_CASILLA);
+      } else {
+        h.getRange(fila, 7).insertCheckboxes().setFontColor(COLOR_CASILLA);
+        h.getRange(fila, 8).setValue('');
+        h.getRange(fila, 1, 1, 6).setFontColor('#9e9e9e');      // ya comprado: en gris
+      }
+    });
+  } else {
+    h.getRange(2, 1).setValue('No hay nada a pedido por ahora.').setFontColor(ESTILO.texto);
+  }
+  h.hideColumns(titulos.length);                                // "clave": es para el script
+}
+
+// Tilde en "Para comprar": tipo 1 = comprado (sí/no), tipo 2 = no se consiguió (columnas 7 y 8 de la hoja)
+function tildeParaComprar_(h, fila, col, valor) {
+  let clave;
+  try { clave = JSON.parse(h.getRange(fila, 9).getValue()); } catch (err) { return; }
+  if (!clave || !clave.id) return;
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const ped = libro.getSheetByName(HOJA_PEDIDOS);
+  const c = columnas_(ped);
+  const filas = ped.getLastRow() - 1;
+  if (filas < 1 || !c.items) return;
+  const productos = leerProductos_(libro);
+  const datos = ped.getRange(2, 1, filas, ped.getLastColumn()).getValues();
+  const codigoDe = (d, i) => (c.pedido && String(d[c.pedido - 1]).trim()) || ('fila ' + (i + 2));
+  const nombre = productos[clave.id] ? productos[clave.id].nombre : 'producto ' + clave.id;
+  let tocados = 0;
+
+  datos.forEach((d, i) => {
+    if (clave.pedidos.indexOf(codigoDe(d, i)) < 0) return;
+    if (d[c.confirmado - 1] !== true || (c.cancelado && d[c.cancelado - 1] === true)) return;
+    const g = leerGuardado_(d[c.items - 1]);
+    if (g.desc !== true) return;
+    const it = g.items.find(x => String(x.id) === clave.id && typeof x.enStock === 'number' && x.cant > x.enStock && !!x.comprado === (clave.estado === 'comprado'));
+    if (!it) return;
+    const fila_ = i + 2;
+
+    if (col === 1) {                                            // comprado / no comprado
+      if (valor) it.comprado = true; else delete it.comprado;
+      ped.getRange(fila_, c.items).setValue(JSON.stringify({ items: g.items, texto: g.texto, desc: true, faltantes: g.faltantes }));
+      if (c['a pedido']) ped.getRange(fila_, c['a pedido']).setValue(textoAPedido_(g.items, productos));   // comprado: sale de "a pedido"
+      tocados++;
+      return;
+    }
+    if (!valor || clave.estado !== 'pendiente') return;          // "no se consiguió" solo en lo pendiente
+    // Se saca del pedido lo que no se consiguió (lo que estaba en stock queda), con el precio que tenía en el pedido
+    const falta = it.cant - it.enStock;
+    const lineas = String(c.detalle ? d[c.detalle - 1] : '').split('\n');
+    const normal = t => String(t).toLowerCase().replace(/\s+/g, ' ').trim();
+    let unitario = productos[clave.id] ? productos[clave.id].precio : 0;
+    const nuevas = lineas.map(l => {
+      const m = l.match(/^(\d+)\s*[xX×]\s*(.+?)\s*\(\s*\$([\d.]+)\s*\)\s*$/);
+      if (!m || normal(m[2]) !== normal(nombre)) return l;
+      unitario = Number(m[3].replace(/\./g, '')) / Number(m[1]);
+      const queda = Number(m[1]) - falta;
+      return queda > 0 ? queda + 'x ' + m[2] + ' (' + pesos_(unitario * queda) + ')' : null;
+    }).filter(l => l !== null);
+    it.cant = it.enStock;
+    g.items = g.items.filter(x => x.cant > 0);
+    g.faltantes = (g.faltantes || []).concat([{ id: clave.id, cant: falta, nombre }]);
+    const detalle = nuevas.join('\n');
+    const total = Math.max(0, (Number(c.total ? d[c.total - 1] : 0) || 0) - unitario * falta);
+    if (c.detalle) ped.getRange(fila_, c.detalle).setValue(detalle);
+    if (c.total) ped.getRange(fila_, c.total).setValue(total);
+    if (c['a pedido']) ped.getRange(fila_, c['a pedido']).setValue(textoAPedido_(g.items, productos));
+    ped.getRange(fila_, c.items).setValue(JSON.stringify({ items: g.items, texto: detalle, desc: true, faltantes: g.faltantes }));
+    tocados++;
+  });
+  SpreadsheetApp.flush();
+  if (col === 2 && valor && tocados) libro.toast('Se sacó "' + nombre + '" de ' + tocados + ' pedido(s). Usá "Avisar confirmación" para contarle al cliente.', 'No se consiguió', 10);
+  if (tocados) revisarPedidos_();                               // actualiza los links de WhatsApp
+  armarParaComprar_();
+}
+
+// Lo que quedó a pedido en un pedido confirmado, una línea por producto: "2x Hueso…"
+function textoAPedido_(items, productos) {
+  return items.filter(it => typeof it.enStock === 'number' && it.cant > it.enStock && !it.comprado)   // lo comprado ya no está "a pedido"
+    .map(it => (it.cant - it.enStock) + 'x ' + (productos[String(it.id)] ? productos[String(it.id)].nombre : 'producto ' + it.id))
+    .join('\n');
 }
 
 // ---------- Movimientos de stock (para saber siempre por qué cambió) ----------
@@ -714,7 +939,7 @@ function actualizarGanancias() {
 
 // Ejecuta "tarea" de a una por vez. Devuelve null si la planilla estaba ocupada.
 function conCandado_(tarea, silencioso) {
-  const lock = LockService.getDocumentLock();
+  const lock = LockService.getScriptLock();
   if (!lock.tryLock(25000)) {
     SpreadsheetApp.getActiveSpreadsheet().toast(silencioso
       ? 'Hubo muchos cambios juntos. Si algo no se actualizó, usá Cremita → Revisar pedidos y stock.'
@@ -749,7 +974,7 @@ const ESTILO = { encabezado: '#904d23', textoEncabezado: '#ffffff', texto: '#000
 function darEstilo_(libro) {
   libro.getSheets().forEach(hoja => {
     const ancho = hoja.getLastColumn();
-    if (!ancho || hoja.isSheetHidden() || ['Cómo está armada', 'Instrucciones'].includes(hoja.getName())) return;   // la guía tiene su propio formato
+    if (!ancho || hoja.isSheetHidden() || ['Cómo está armada', 'Instrucciones', HOJA_PARA_COMPRAR].includes(hoja.getName())) return;   // la guía tiene su propio formato
     const filas = hoja.getMaxRows();
     hoja.getBandings().forEach(b => b.remove());
     const todo = hoja.getRange(1, 1, filas, ancho);
@@ -812,7 +1037,18 @@ function linkSegunEstado_(hoja, c, fila, d, actual, estado, nota) {
   const v = t => (c[t] ? d[c[t] - 1] : '');
   const tel = numeroWhatsApp_(v('telefono'));
   const celda = hoja.getRange(fila, c.whatsapp);
-  const textos = { '': 'Escribirle', confirmado: 'Avisar confirmación', cancelado: 'Avisar cancelación', sinstock: 'Avisar falta de stock' };
+
+  // Confirmado: al cliente nunca se le habla de stock. Si el pedido tiene cosas a pedido,
+  // primero se le confirma sin cobrar; cuando todo está comprado (o marcado "no se consiguió")
+  // el link pasa a "Avisar que está listo", con el total final y el alias.
+  const g = leerGuardado_(v('items'));
+  const faltantes = g.faltantes || [];
+  const aPedido = it => typeof it.enStock === 'number' && it.cant > it.enStock;
+  const tuvoAPedido = g.items.some(aPedido) || faltantes.length > 0;
+  const esperando = g.items.some(it => aPedido(it) && !it.comprado);
+  const listo = estado === 'confirmado' && tuvoAPedido && !esperando;
+
+  const textos = { '': 'Escribirle', confirmado: listo ? 'Avisar que está listo' : 'Avisar confirmación', cancelado: 'Avisar cancelación', sinstock: 'Avisar falta de stock' };
   const texto = tel ? textos[estado] : '';
   actual = actual || { texto: '', url: '' };
   if (!texto) { if (actual.texto) celda.clearContent(); return; }
@@ -820,12 +1056,22 @@ function linkSegunEstado_(hoja, c, fila, d, actual, estado, nota) {
   const nombre = String(v('nombre')).trim(), codigo = String(v('pedido')).trim();
   const hola = '¡Hola' + (nombre ? ' ' + nombre : '') + '! Te escribimos de ' + NOMBRE_TIENDA + '. ';
   const pedido = 'Tu pedido' + (codigo ? ' #' + codigo : '');
-  const msg = estado === 'confirmado'
-    ? hola + pedido + ' quedó confirmado:\n' +
-      String(v('detalle')).split('\n').map(l => l.trim()).filter(Boolean).map(l => '• ' + l.replace(/^(\d+x\s*)\[[^\]]*\]\s*/, '$1')).join('\n') +
-      (Number(v('total')) ? '\nTotal: ' + pesos_(Number(v('total'))) : '') +
-      (ALIAS_PAGO ? '\n\nPodés transferir' + (Number(v('total')) ? ' ' + pesos_(Number(v('total'))) : '') +
-        ' al alias: ' + ALIAS_PAGO + '\nCuando transfieras, mandanos el comprobante por acá.' : '') +
+  const lineas = String(v('detalle')).split('\n').map(l => l.trim()).filter(Boolean).map(l => '• ' + l.replace(/^(\d+x\s*)\[[^\]]*\]\s*/, '$1')).join('\n');
+  const total = Number(v('total')) ? '\nTotal: ' + pesos_(Number(v('total'))) : '';
+  const pago = ALIAS_PAGO ? '\n\nPodés transferir' + (Number(v('total')) ? ' ' + pesos_(Number(v('total'))) : '') +
+    ' al alias: ' + ALIAS_PAGO + '\nCuando transfieras, mandanos el comprobante por acá.' : '';
+  const noSeConsiguio = faltantes.length
+    ? '\n\nLo que no pudimos conseguir (ya lo sacamos del total):\n' + faltantes.map(x => '• ' + x.cant + 'x ' + x.nombre).join('\n')
+    : '';
+
+  const msg = estado === 'confirmado' && listo
+    ? hola + pedido + ' ya está listo:\n' + lineas + total + noSeConsiguio + pago +
+      '\n\nNos ponemos en contacto para coordinar la entrega. ¡Gracias por tu compra!'
+    : estado === 'confirmado' && esperando
+    ? hola + pedido + ' quedó confirmado:\n' + lineas + total +
+      '\n\nTe avisamos por acá cuando esté listo para coordinar la entrega y el pago. ¡Gracias por tu compra!'
+    : estado === 'confirmado'
+    ? hola + pedido + ' quedó confirmado:\n' + lineas + total + pago +
       '\n\nNos ponemos en contacto para coordinar la entrega. ¡Gracias por tu compra!'
     : estado === 'cancelado'
     ? hola + pedido + ' tuvo que ser cancelado. Si querés, te ayudamos a armar otro. ¡Perdón por las molestias!'
@@ -840,6 +1086,11 @@ function linkSegunEstado_(hoja, c, fila, d, actual, estado, nota) {
   if (texto === actual.texto && url === actual.url) return;    // ya está bien (mismo texto y mismo mensaje)
   // Link común (no fórmula), así anda en cualquier idioma de la planilla
   celda.setRichTextValue(SpreadsheetApp.newRichTextValue().setText(texto).setLinkUrl(url).build());
+}
+
+// Lo que no se consiguió de un pedido (lo guarda "Para comprar" en la columna oculta "items")
+function faltantes_(crudo) {
+  return leerGuardado_(crudo).faltantes || [];
 }
 
 // Saca columnas por título (las ▲ ▼ de antes)
