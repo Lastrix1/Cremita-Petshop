@@ -106,6 +106,14 @@ function aplicarFiltro(animal = "", tipo = "", origen = "") {
   renderGrilla();
 }
 
+// Lo que va entre paréntesis al final del nombre se muestra abajo, más chico.
+// Ej: "Power comprimidos (perro 10 a 20 kg / gato 6 a 12 kg)" → título + aclaración en gris.
+function tituloTarjeta(nombre) {
+  const m = String(nombre).match(/^(.{3,}?)\s*\(([^()]+)\)\s*$/);
+  if (!m) return escapar(nombre);
+  return `${escapar(m[1])}<span class="tarjeta-aclaracion">${escapar(m[2])}</span>`;
+}
+
 function renderGrilla() {
   const texto = busqueda.trim().toLowerCase();
   const visibles = PRODUCTOS.filter(
@@ -135,7 +143,7 @@ function renderGrilla() {
           <div class="tarjeta-imagen">${imagen}${cartel}</div>
           <div class="tarjeta-cuerpo">
             <span class="tarjeta-categoria">${p.mixto ? "Perros y gatos" : escapar(p.categoria)} · ${escapar(p.subcategoria)}${p.porKilo ? " · suelto por kilo" : ""}</span>
-            <h3>${escapar(p.nombre)}</h3>
+            <h3>${tituloTarjeta(p.nombre)}</h3>
             <div class="tarjeta-pie">
               <span class="precio">${formatoPrecio(p.precio)}${p.porKilo ? `<small class="por-kilo"> / kg</small>` : ""}</span>
               <button class="btn-agregar" data-agregar="${p.id}" aria-label="${sinStock ? "Sin stock" : "Agregar " + escapar(p.nombre)}" ${sinStock || (carrito[p.id] || 0) >= maximoPermitido(p) ? "disabled" : ""}>
