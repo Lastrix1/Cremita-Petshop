@@ -40,8 +40,11 @@ function buscarProducto(id) {
 
 // ---------- Stock (viene de la planilla; null = sin control de stock) ----------
 
-const hayStock = (p) => p.stock == null || p.stock > 0;
-const maximoPermitido = (p) => (p.stock == null ? 99 : Math.max(0, p.stock));
+const hayStock = (p) => p.stock == null || p.stock >= 1;
+const maximoPermitido = (p) => (p.stock == null ? 99 : Math.max(0, Math.floor(p.stock))); // por kilo: solo kilos enteros
+
+// Cantidad para mostrar: "2" o "2 kg" si se vende suelto
+const cantidadTexto = (p, n) => (p.porKilo ? `${n} kg` : `${n}`);
 
 // Saca del carrito lo que ya no hay y ajusta cantidades al stock disponible
 function ajustarCarritoAlStock() {
@@ -107,7 +110,7 @@ function renderGrilla() {
   const texto = busqueda.trim().toLowerCase();
   const visibles = PRODUCTOS.filter(
     (p) =>
-      (!filtro.animal || p.categoria === filtro.animal) &&
+      (!filtro.animal || p.categoria === filtro.animal || p.mixto) &&
       (!filtro.tipo || p.subcategoria === filtro.tipo) &&
       p.nombre.toLowerCase().includes(texto)
   );
@@ -131,10 +134,10 @@ function renderGrilla() {
         <article class="tarjeta${sinStock ? " sin-stock" : alTope ? " al-tope" : ""}">
           <div class="tarjeta-imagen">${imagen}${cartel}</div>
           <div class="tarjeta-cuerpo">
-            <span class="tarjeta-categoria">${escapar(p.categoria)} · ${escapar(p.subcategoria)}</span>
+            <span class="tarjeta-categoria">${p.mixto ? "Perros y gatos" : escapar(p.categoria)} · ${escapar(p.subcategoria)}${p.porKilo ? " · suelto por kilo" : ""}</span>
             <h3>${escapar(p.nombre)}</h3>
             <div class="tarjeta-pie">
-              <span class="precio">${formatoPrecio(p.precio)}</span>
+              <span class="precio">${formatoPrecio(p.precio)}${p.porKilo ? `<small class="por-kilo"> / kg</small>` : ""}</span>
               <button class="btn-agregar" data-agregar="${p.id}" aria-label="${sinStock ? "Sin stock" : "Agregar " + escapar(p.nombre)}" ${sinStock || (carrito[p.id] || 0) >= maximoPermitido(p) ? "disabled" : ""}>
                 <i class="ti ti-plus" aria-hidden="true"></i>
               </button>
@@ -186,11 +189,11 @@ function renderCarrito() {
             <div class="item">
               <div class="item-info">
                 <span class="item-nombre">${escapar(p.nombre)}</span>
-                <span class="item-precio">${formatoPrecio(p.precio)} c/u</span>
+                <span class="item-precio">${formatoPrecio(p.precio)} ${p.porKilo ? "el kg" : "c/u"}</span>
               </div>
               <div class="item-cantidad">
                 <button data-restar="${p.id}" aria-label="Quitar uno">−</button>
-                <span>${carrito[id]}</span>
+                <span>${cantidadTexto(p, carrito[id])}</span>
                 <button data-agregar="${p.id}" aria-label="Agregar uno" ${carrito[id] >= maximoPermitido(p) ? "disabled" : ""}>+</button>
               </div>
               <span class="item-subtotal">${formatoPrecio(p.precio * carrito[id])}</span>
@@ -306,7 +309,7 @@ function enviarWhatsApp() {
 
   const lineas = ids.map((id) => {
     const p = buscarProducto(id);
-    return `• ${carrito[id]}x ${p.nombre} – ${formatoPrecio(p.precio * carrito[id])}`;
+    return `• ${p.porKilo ? carrito[id] + " kg" : carrito[id] + "x"} ${p.nombre} – ${formatoPrecio(p.precio * carrito[id])}`;
   });
 
   // Se anota el pedido en la planilla con un código; el WhatsApp lleva ese mismo código

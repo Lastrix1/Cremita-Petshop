@@ -38,6 +38,9 @@ function aNumero(v) {
   return Number(s);
 }
 
+// Mascota "Mixto" (o "Ambos", "Perros y gatos"): el producto sirve para las dos
+const esMixto = (m) => /^(mixto|ambos|perros y gatos)$/i.test(String(m).trim());
+
 const ORDEN_TIPOS = ["Comida", "Juguetes", "Accesorios", "Higiene"];
 const ordenarTipos = (lista) =>
   [...lista].sort((a, b) => {
@@ -97,8 +100,10 @@ async function cargarPlanilla() {
     nuevos.push({
       id, nombre, precio,
       stock: Number.isFinite(stock) ? stock : null, // null = sin control de stock
-      categoria: mascota, subcategoria: tipo,
+      categoria: esMixto(mascota) ? "" : mascota, subcategoria: tipo,
+      mixto: esMixto(mascota), // "Mixto": sirve para perros y gatos, aparece en las dos
       imagen: foto, icono: dato("icono") || "ti-paw",
+      porKilo: /^kg$/i.test(dato("unidad")), // columna "unidad" = kg → se vende suelto por kilo
     });
   }
   // Sin productos activos es válido: la página muestra el catálogo vacío
@@ -106,10 +111,11 @@ async function cargarPlanilla() {
   PRODUCTOS.push(...nuevos);
 
   // Los filtros se arman solos con las mascotas y los tipos que haya en la planilla
-  const mascotas = [...new Set(nuevos.map((p) => p.categoria))];
+  // Los "Mixto" no tienen botón propio: entran en el menú de cada mascota
+  const mascotas = [...new Set(nuevos.filter((p) => !p.mixto).map((p) => p.categoria))];
   CATEGORIAS.length = 0;
   mascotas.forEach((m) =>
-    CATEGORIAS.push({ nombre: m, subcategorias: ordenarTipos(new Set(nuevos.filter((p) => p.categoria === m).map((p) => p.subcategoria))) })
+    CATEGORIAS.push({ nombre: m, subcategorias: ordenarTipos(new Set(nuevos.filter((p) => p.mixto || p.categoria === m).map((p) => p.subcategoria))) })
   );
   // Botones sueltos por tipo (como antes, sin "Comida", que va dentro de cada mascota)
   TIPOS.length = 0;

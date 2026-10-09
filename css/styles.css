@@ -995,3 +995,6 @@ img {
   40%, 80% { transform: translateX(6px); }
 }
 @media (prefers-reduced-motion: reduce) { .sacudir { animation: none; } }
+
+/* Productos sueltos por kilo: "/ kg" al lado del precio */
+.precio .por-kilo { font-size: .6em; font-weight: 600; opacity: .8; }

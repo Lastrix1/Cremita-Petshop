@@ -101,3 +101,17 @@ Después de pegar el script, recargá la planilla (F5): arriba aparece el menú 
 
 La columna *items* queda oculta (la usa el script). Las columnas se buscan por el **título**, así que se pueden mover de lugar, pero no cambiarles el nombre.
 No borres a mano un pedido confirmado que querés cancelar: primero tildá *cancelado* para que vuelva el stock.
+
+---
+
+## Entregados y ganancias
+
+- En **Pedidos** hay una casilla **entregado**. Tildala cuando el pedido ya se entregó (tiene que estar *confirmado*):
+  el pedido pasa a la hoja **Entregados** y sale de Pedidos.
+- En la hoja **Costos** cargá cuánto te cuesta cada producto (lo que pagás al proveedor, por unidad).
+  Esta hoja **no se publica**: los clientes no la ven. Los productos nuevos aparecen solos al usar *Preparar planilla*.
+- En **Entregados** se calcula el **costo** y la **ganancia** de cada pedido. Si falta algún costo, queda vacío
+  con una notita que dice cuál falta; al cargarlo en *Costos* se completa solo.
+- La hoja **Resumen** muestra por mes: pedidos, ventas, costo, ganancia y margen. Se actualiza sola;
+  si algo no cuadra, usá **Cremita → Actualizar ganancias**.
+
