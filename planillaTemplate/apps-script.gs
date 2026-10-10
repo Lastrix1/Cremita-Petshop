@@ -248,7 +248,7 @@ function alEditar(e) {
     const c = columnas_(hoja);
     const unaCelda = e.range.getNumRows() === 1 && e.range.getNumColumns() === 1;
     if (unaCelda && e.range.getColumn() === c.stock && e.range.getRow() > 1) conCandado_(() => sumarEnCelda_(e), true);
-    else if (tocada(c.nombre)) ponerIdsFaltantes_(hoja);
+    else if (tocada(c.nombre)) conCandado_(() => { ponerIdsFaltantes_(hoja); sincronizarCostos_(); }, true);
     return;
   }
   if (nombre === HOJA_ENTREGADOS || nombre === HOJA_COSTOS) {
@@ -754,7 +754,7 @@ function prepararVentas_() {
     ent.getRange(1, 1, 1, TITULOS_ENTREGADOS.length).setValues([TITULOS_ENTREGADOS]).setFontWeight('bold');
     ent.setFrozenRows(1);
     ent.hideColumns(TITULOS_ENTREGADOS.indexOf('items') + 1);
-    ent.getRange(1, TITULOS_ENTREGADOS.indexOf('costo') + 1).setNote('Se calcula con la hoja "Costos". Si falta algún costo queda vacío: cargalo en "Costos" y se completa solo.');
+    ent.getRange(1, TITULOS_ENTREGADOS.indexOf('costo') + 1).setNote('Se toma de "Costos" el día que se entrega y queda fijo (si después cambia el costo, esta venta no cambia). Si faltaba algún costo queda vacío: cargalo en "Costos" y se completa solo.');
   }
   let cos = libro.getSheetByName(HOJA_COSTOS);
   if (!cos) {
@@ -764,20 +764,53 @@ function prepararVentas_() {
     cos.getRange(1, 3).setNote('Cuánto te cuesta a vos cada unidad (lo que pagás al proveedor). Esta hoja no se publica: los clientes no la ven.');
     cos.getRange('C2:C').setNumberFormat('$#,##0');
   }
-  // Productos que todavía no están en Costos (y nombres actualizados)
-  const productos = leerProductos_(libro);
-  const filas = cos.getLastRow() > 1 ? cos.getRange(2, 1, cos.getLastRow() - 1, 2).getValues() : [];
-  const ya = {};
-  filas.forEach((f, i) => {
-    const id = String(f[0]).trim();
-    ya[id] = true;
-    if (productos[id] && String(f[1]) !== productos[id].nombre) cos.getRange(i + 2, 2).setValue(productos[id].nombre);
-  });
-  const nuevos = Object.keys(productos).filter(id => !ya[id]).map(id => [id, productos[id].nombre, '']);
-  if (nuevos.length) cos.getRange(cos.getLastRow() + 1, 1, nuevos.length, 3).setValues(nuevos);
-
   if (!libro.getSheetByName(HOJA_RESUMEN)) libro.insertSheet(HOJA_RESUMEN);
-  recalcularVentas_();
+  recalcularVentas_();          // primero: las ventas se quedan con su costo (congelado) antes de tocar Costos
+  sincronizarCostos_();
+}
+
+// Deja "Costos" en el mismo orden que "Productos": cada producto a la misma altura, los nuevos en su lugar.
+// Los productos que ya no están en Productos se sacan (las ventas viejas ya tienen su costo guardado),
+// salvo que estén en un pedido sin entregar: esos quedan al final hasta que se entregue.
+function sincronizarCostos_() {
+  const libro = SpreadsheetApp.getActiveSpreadsheet();
+  const cos = libro.getSheetByName(HOJA_COSTOS);
+  if (!cos) return;
+  const cc = columnas_(cos);
+  if (!cc.id) return;
+  const ancho = cos.getLastColumn();
+  const viejas = cos.getLastRow() > 1 ? cos.getRange(2, 1, cos.getLastRow() - 1, ancho).getValues() : [];
+  const porId = {};
+  viejas.forEach(f => { const id = String(f[cc.id - 1]).trim(); if (id && !porId[id]) porId[id] = f; });
+
+  // Orden de Productos (por fila, tal como está la hoja)
+  const prod = libro.getSheetByName(HOJA_PRODUCTOS);
+  const cp = columnas_(prod);
+  const ordenProd = prod.getLastRow() > 1
+    ? prod.getRange(2, 1, prod.getLastRow() - 1, prod.getLastColumn()).getValues()
+        .map(f => ({ id: String(f[cp.id - 1]).trim(), nombre: String(f[cp.nombre - 1]) })).filter(x => x.id)
+    : [];
+  // Productos de pedidos sin entregar (si se borraron de Productos, su costo hace falta todavía)
+  const enPedidos = {};
+  const ped = libro.getSheetByName(HOJA_PEDIDOS), cped = ped ? columnas_(ped) : {};
+  if (ped && cped.items && ped.getLastRow() > 1) ped.getRange(2, cped.items, ped.getLastRow() - 1, 1).getValues()
+    .forEach(f => leerGuardado_(f[0]).items.forEach(it => { enPedidos[String(it.id)] = true; }));
+
+  const fila = (id, nombre) => {
+    const f = porId[id] ? porId[id].slice() : new Array(ancho).fill('');
+    f[cc.id - 1] = id;
+    if (cc.producto && nombre) f[cc.producto - 1] = nombre;
+    return f;
+  };
+  const vistos = {};
+  const nuevas = ordenProd.map(x => { vistos[x.id] = true; return fila(x.id, x.nombre); });
+  Object.keys(porId).filter(id => !vistos[id] && enPedidos[id]).forEach(id => nuevas.push(fila(id, '')));
+
+  const iguales = nuevas.length === viejas.length && nuevas.every((f, i) => f.every((x, j) => String(x) === String(viejas[i][j])));
+  if (iguales) return;                                          // ya estaba en orden: no se toca nada
+  if (viejas.length) cos.getRange(2, 1, viejas.length, ancho).clearContent();
+  if (nuevas.length) cos.getRange(2, 1, nuevas.length, ancho).setValues(nuevas);
+  if (cc.costo) cos.getRange(2, cc.costo, Math.max(cos.getMaxRows() - 1, 1), 1).setNumberFormat('$#,##0');
 }
 
 // Pedidos con "entregado" tildado → a la hoja Entregados (solo si estaban confirmados)
@@ -793,6 +826,7 @@ function pasarEntregados_() {
   const datos = hoja.getRange(2, 1, filas, hoja.getLastColumn()).getValues();
   const v = (d, t) => (c[t] ? d[c[t] - 1] : '');
   const ahora = new Date();
+  const costosHoy = leerCostos_(libro), prodsHoy = leerProductos_(libro);
   let pasados = 0;
 
   for (let i = filas - 1; i >= 0; i--) {                        // de abajo para arriba (se borran filas)
@@ -810,7 +844,12 @@ function pasarEntregados_() {
     poner('fecha', v(d, 'fecha'));
     poner('entregado', ahora);
     ['pedido', 'nombre', 'telefono', 'detalle', 'total'].forEach(t => poner(t, v(d, t)));
-    poner('items', JSON.stringify(leerGuardado_(v(d, 'items')).items));
+    // Cada producto se lleva su nombre y el costo de HOY: la ganancia de esta venta ya no cambia aunque después cambie Costos
+    poner('items', JSON.stringify(leerGuardado_(v(d, 'items')).items.map(it => {
+      const x = { id: String(it.id), cant: it.cant, nombre: prodsHoy[String(it.id)] ? prodsHoy[String(it.id)].nombre : (it.nombre || '') };
+      if (typeof costosHoy[String(it.id)] === 'number') x.costo = costosHoy[String(it.id)];
+      return x;
+    })));
     ent.appendRow(fila_);
     hoja.deleteRow(fila);
     pasados++;
@@ -841,13 +880,8 @@ function recalcularVentas_() {
   const ce = columnas_(ent);
   const tz = libro.getSpreadsheetTimeZone();
 
-  // Costos por id
-  const costos = {};
-  const cos = libro.getSheetByName(HOJA_COSTOS);
-  if (cos && cos.getLastRow() > 1) cos.getRange(2, 1, cos.getLastRow() - 1, 3).getValues().forEach(f => {
-    const n = Number(String(f[2]).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.'));
-    if (String(f[2]).trim() !== '' && !isNaN(n)) costos[String(f[0]).trim()] = typeof f[2] === 'number' ? f[2] : n;
-  });
+  // Costos por id (solo para las ventas que todavía no tienen su costo guardado)
+  const costos = leerCostos_(libro);
   const nombres = {};
   const prods = leerProductos_(libro);
   Object.keys(prods).forEach(id => { nombres[id] = prods[id].nombre; });
@@ -856,14 +890,24 @@ function recalcularVentas_() {
   const meses = {};
   if (filas > 0) {
     const datos = ent.getRange(2, 1, filas, ent.getLastColumn()).getValues();
+    const itemsNuevos = [];
+    let salidaFila = 2;
     const salida = datos.map(d => {
       const v = t => (ce[t] ? d[ce[t] - 1] : '');
       let items = [];
       try { items = JSON.parse(v('items') || '[]'); } catch (err) {}
-      const faltan = items.filter(it => !(String(it.id) in costos)).map(it => nombres[it.id] || ('producto ' + it.id));
+      // Lo que no tenía costo guardado se completa con Costos y queda congelado desde ahora
+      let completado = false;
+      items.forEach(it => {
+        if (typeof it.costo !== 'number' && typeof costos[String(it.id)] === 'number') { it.costo = costos[String(it.id)]; completado = true; }
+        if (!it.nombre && nombres[it.id]) { it.nombre = nombres[it.id]; completado = true; }
+      });
+      if (completado) itemsNuevos.push({ fila: salidaFila, texto: JSON.stringify(items) });
+      salidaFila++;
+      const faltan = items.filter(it => typeof it.costo !== 'number').map(it => it.nombre || nombres[it.id] || ('producto ' + it.id));
       // Si alguien escribió el costo a mano en Entregados, se respeta
       const costoEscrito = v('costo') !== '' && typeof v('costo') === 'number' && !items.length;
-      const costo = costoEscrito ? v('costo') : (items.length && !faltan.length ? items.reduce((s, it) => s + costos[String(it.id)] * it.cant, 0) : '');
+      const costo = costoEscrito ? v('costo') : (items.length && !faltan.length ? items.reduce((s, it) => s + it.costo * it.cant, 0) : '');
       const total = Number(v('total')) || 0;
       const ganancia = costo === '' ? '' : total - costo;
       const fecha = v('entregado') instanceof Date ? v('entregado') : (v('fecha') instanceof Date ? v('fecha') : null);
@@ -875,6 +919,7 @@ function recalcularVentas_() {
       }
       return { costo, ganancia, mes, nota: faltan.length ? 'Falta el costo de: ' + faltan.join(', ') + ' (cargalo en "Costos")' : '' };
     });
+    if (ce.items) itemsNuevos.forEach(x => ent.getRange(x.fila, ce.items).setValue(x.texto));
     if (ce.costo) {
       ent.getRange(2, ce.costo, filas, 1).setValues(salida.map(x => [x.costo])).setNotes(salida.map(x => [x.nota])).setNumberFormat('$#,##0');
     }
@@ -911,6 +956,22 @@ function recalcularVentas_() {
   }
   res.getRange(1, 5).setNote('Ganancia = lo que pagó el cliente − lo que te costaron los productos (hoja "Costos"). Si un pedido no tiene todos sus costos cargados, no suma a "Costo" ni a "Ganancia" hasta que los cargues en "Costos".');
   res.setFrozenRows(1);
+}
+
+// { id: costo } de la hoja Costos (solo los que tienen un número cargado)
+function leerCostos_(libro) {
+  const costos = {};
+  const cos = libro.getSheetByName(HOJA_COSTOS);
+  if (!cos || cos.getLastRow() < 2) return costos;
+  const cc = columnas_(cos);
+  const cId = cc.id || 1, cCosto = cc.costo || 3;
+  cos.getRange(2, 1, cos.getLastRow() - 1, cos.getLastColumn()).getValues().forEach(f => {
+    const crudo = f[cCosto - 1];
+    if (String(crudo).trim() === '') return;
+    const n = typeof crudo === 'number' ? crudo : Number(String(crudo).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(n)) costos[String(f[cId - 1]).trim()] = n;
+  });
+  return costos;
 }
 
 // Pedidos de antes (sin la marca guardada): se toma la casilla tal como está, una sola vez
